@@ -1,0 +1,417 @@
+<script setup lang="ts">
+import {
+  DollarSign, TrendingUp, Users, BarChart3,
+  CalendarDays, ChevronLeft, ChevronRight, Filter,
+} from 'lucide-vue-next'
+
+definePageMeta({ layout: 'admin', middleware: ['auth', 'role'] })
+
+const supabase = useSupabaseClient()
+
+function hoje() { return new Date().toISOString().slice(0, 10) }
+function inicioMes() {
+  const d = new Date()
+  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10)
+}
+function fmtBRL(v: number) {
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+function gerarPaginas(atual: number, total: number): (number | '...')[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  const pages: (number | '...')[] = [1]
+  if (atual > 3) pages.push('...')
+  for (let i = Math.max(2, atual - 1); i <= Math.min(total - 1, atual + 1); i++) pages.push(i)
+  if (atual < total - 2) pages.push('...')
+  pages.push(total)
+  return pages
+}
+
+// Filtros
+const dataIni = ref(inicioMes())
+const dataFim = ref(hoje())
+const medicoFiltro = ref('')
+const medicos = ref<{ id: string; nome: string; especialidade: string; valor_consulta: number | null }[]>([])
+
+// Dados
+const carregando = ref(false)
+
+interface RowMedico {
+  id: string
+  nome: string
+  especialidade: string
+  valorConsulta: number
+  consultas: number
+  receitaTotal: number
+  ticketMedio: number
+}
+
+const linhas = ref<RowMedico[]>([])
+
+// Paginação dos atendimentos detalhados
+const POR_PAGINA = 20
+const paginaDetalhe = ref(1)
+const totalDetalhe = ref(0)
+const atendimentos = ref<{ data: string; paciente: string; medico: string; duracao: number | null; valor: number }[]>([])
+const totalPagDetalhe = computed(() => Math.max(1, Math.ceil(totalDetalhe.value / POR_PAGINA)))
+
+// KPIs
+const receitaTotal = computed(() => linhas.value.reduce((s, r) => s + r.receitaTotal, 0))
+const totalConsultas = computed(() => linhas.value.reduce((s, r) => s + r.consultas, 0))
+const ticketMedioGeral = computed(() =>
+  totalConsultas.value ? receitaTotal.value / totalConsultas.value : 0
+)
+const medicoTopReceita = computed(() =>
+  [...linhas.value].sort((a, b) => b.receitaTotal - a.receitaTotal)[0] ?? null
+)
+
+async function carregar() {
+  carregando.value = true
+  paginaDetalhe.value = 1
+
+  // Buscar todos os médicos com valor_consulta
+  const { data: meds } = await supabase
+    .from('medicos')
+    .select('id, nome, especialidade, valor_consulta')
+    .eq('ativo', true)
+    .order('nome')
+  medicos.value = (meds ?? []) as typeof medicos.value
+
+  // Buscar consultas concluídas no período
+  let q = supabase
+    .from('consultas')
+    .select('medico_id, duracao_minutos, created_at, pacientes(nome)', { count: 'exact' })
+    .gte('created_at', `${dataIni.value}T00:00:00`)
+    .lte('created_at', `${dataFim.value}T23:59:59`)
+
+  if (medicoFiltro.value) q = q.eq('medico_id', medicoFiltro.value)
+
+  const { data: consultas } = await q
+
+  // Agrupar por médico
+  const porMedico: Record<string, number> = {}
+  ;(consultas ?? []).forEach((c: any) => {
+    if (!c.medico_id) return
+    porMedico[c.medico_id] = (porMedico[c.medico_id] ?? 0) + 1
+  })
+
+  const medicosAlvo = medicoFiltro.value
+    ? medicos.value.filter(m => m.id === medicoFiltro.value)
+    : medicos.value
+
+  linhas.value = medicosAlvo
+    .map(m => {
+      const qtd = porMedico[m.id] ?? 0
+      const valor = m.valor_consulta ?? 0
+      return {
+        id: m.id,
+        nome: m.nome,
+        especialidade: m.especialidade,
+        valorConsulta: valor,
+        consultas: qtd,
+        receitaTotal: qtd * valor,
+        ticketMedio: qtd ? valor : 0,
+      }
+    })
+    .sort((a, b) => b.receitaTotal - a.receitaTotal)
+
+  await carregarAtendimentos()
+  carregando.value = false
+}
+
+async function carregarAtendimentos() {
+  const from = (paginaDetalhe.value - 1) * POR_PAGINA
+  let q = supabase
+    .from('consultas')
+    .select('created_at, duracao_minutos, medico_id, medicos(nome), pacientes(nome)', { count: 'exact' })
+    .gte('created_at', `${dataIni.value}T00:00:00`)
+    .lte('created_at', `${dataFim.value}T23:59:59`)
+    .order('created_at', { ascending: false })
+    .range(from, from + POR_PAGINA - 1)
+
+  if (medicoFiltro.value) q = q.eq('medico_id', medicoFiltro.value)
+
+  const { data, count } = await q
+  totalDetalhe.value = count ?? 0
+
+  const mapa: Record<string, number> = {}
+  medicos.value.forEach(m => { mapa[m.id] = m.valor_consulta ?? 0 })
+
+  atendimentos.value = (data ?? []).map((c: any) => ({
+    data: c.created_at,
+    paciente: c.pacientes?.nome ?? '—',
+    medico: c.medicos?.nome ?? '—',
+    duracao: c.duracao_minutos,
+    valor: mapa[c.medico_id] ?? 0,
+  }))
+}
+
+watch([dataIni, dataFim, medicoFiltro], () => carregar())
+watch(paginaDetalhe, carregarAtendimentos)
+onMounted(carregar)
+
+function setPeriodo(p: 'hoje' | '7d' | '30d' | 'mes') {
+  dataFim.value = hoje()
+  if (p === 'hoje') dataIni.value = hoje()
+  else if (p === '7d') { const d = new Date(); d.setDate(d.getDate() - 6); dataIni.value = d.toISOString().slice(0, 10) }
+  else if (p === '30d') { const d = new Date(); d.setDate(d.getDate() - 29); dataIni.value = d.toISOString().slice(0, 10) }
+  else dataIni.value = inicioMes()
+}
+
+function exportarCSV() {
+  const linhasCSV = [
+    ['Médico', 'Especialidade', 'Valor/Consulta', 'Consultas', 'Receita Total'],
+    ...linhas.value.map(r => [r.nome, r.especialidade, r.valorConsulta, r.consultas, r.receitaTotal]),
+  ]
+  const csv = linhasCSV.map(l => l.join(',')).join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = `financeiro_${dataIni.value}_${dataFim.value}.csv`; a.click()
+  URL.revokeObjectURL(url)
+}
+</script>
+
+<template>
+  <div class="space-y-5">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div>
+        <h1 class="text-2xl font-bold text-[var(--color-text)]">Financeiro</h1>
+        <p class="text-[var(--color-text-muted)] text-sm mt-1">Receita por médico com base nas consultas realizadas</p>
+      </div>
+      <UiButton variant="secondary" size="sm" @click="exportarCSV">
+        <BarChart3 :size="15" /> Exportar CSV
+      </UiButton>
+    </div>
+
+    <!-- Filtros -->
+    <div class="bg-white rounded-2xl border p-4 space-y-3" style="border-color:var(--color-border)">
+      <!-- Período -->
+      <div class="flex flex-wrap items-center gap-2">
+        <CalendarDays :size="14" style="color:var(--color-text-dim)" />
+        <span class="text-xs font-semibold shrink-0" style="color:var(--color-text-muted)">Período:</span>
+        <button
+          v-for="p in [{ v: 'hoje', l: 'Hoje' }, { v: '7d', l: '7 dias' }, { v: '30d', l: '30 dias' }, { v: 'mes', l: 'Este mês' }]"
+          :key="p.v"
+          class="px-3 py-1 rounded-full text-xs font-semibold border transition-all"
+          style="background:white;color:var(--color-text-muted);border-color:var(--color-border)"
+          @click="setPeriodo(p.v as any)"
+        >{{ p.l }}</button>
+        <div class="flex items-center gap-1.5 ml-auto">
+          <input v-model="dataIni" type="date" class="rounded-xl border px-3 py-1.5 text-xs outline-none" style="border-color:var(--color-border);background:var(--color-surface-2)" />
+          <span class="text-xs" style="color:var(--color-text-dim)">até</span>
+          <input v-model="dataFim" type="date" class="rounded-xl border px-3 py-1.5 text-xs outline-none" style="border-color:var(--color-border);background:var(--color-surface-2)" />
+        </div>
+      </div>
+
+      <!-- Médico -->
+      <div class="flex flex-wrap gap-2 items-center">
+        <span class="inline-flex items-center gap-1 text-xs font-semibold shrink-0" style="color:var(--color-text-muted)">
+          <Filter :size="12" /> Médico:
+        </span>
+        <button
+          class="px-3 py-1 rounded-full text-xs font-semibold border transition-all"
+          :style="medicoFiltro === '' ? 'background:#2563eb;color:white;border-color:#2563eb' : 'background:white;color:var(--color-text-muted);border-color:var(--color-border)'"
+          @click="medicoFiltro = ''"
+        >Todos</button>
+        <button
+          v-for="m in medicos" :key="m.id"
+          class="px-3 py-1 rounded-full text-xs font-semibold border transition-all"
+          :style="medicoFiltro === m.id ? 'background:#2563eb;color:white;border-color:#2563eb' : 'background:white;color:var(--color-text-muted);border-color:var(--color-border)'"
+          @click="medicoFiltro = m.id"
+        >{{ m.nome }}</button>
+      </div>
+    </div>
+
+    <!-- Loading -->
+    <div v-if="carregando" class="py-12 text-center">
+      <div class="inline-block w-6 h-6 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+    </div>
+
+    <template v-else>
+      <!-- KPI Cards -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white rounded-2xl border p-4" style="border-color:var(--color-border)">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:#dbeafe">
+              <DollarSign :size="16" style="color:#2563eb" />
+            </div>
+            <p class="text-xs font-semibold" style="color:var(--color-text-muted)">Receita Total</p>
+          </div>
+          <p class="text-2xl font-bold text-[var(--color-text)]">{{ fmtBRL(receitaTotal) }}</p>
+        </div>
+
+        <div class="bg-white rounded-2xl border p-4" style="border-color:var(--color-border)">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:#dcfce7">
+              <BarChart3 :size="16" style="color:#16a34a" />
+            </div>
+            <p class="text-xs font-semibold" style="color:var(--color-text-muted)">Consultas</p>
+          </div>
+          <p class="text-2xl font-bold text-[var(--color-text)]">{{ totalConsultas }}</p>
+        </div>
+
+        <div class="bg-white rounded-2xl border p-4" style="border-color:var(--color-border)">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:#fef3c7">
+              <TrendingUp :size="16" style="color:#d97706" />
+            </div>
+            <p class="text-xs font-semibold" style="color:var(--color-text-muted)">Ticket Médio</p>
+          </div>
+          <p class="text-2xl font-bold text-[var(--color-text)]">{{ fmtBRL(ticketMedioGeral) }}</p>
+        </div>
+
+        <div class="bg-white rounded-2xl border p-4" style="border-color:var(--color-border)">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:#ede9fe">
+              <Users :size="16" style="color:#7c3aed" />
+            </div>
+            <p class="text-xs font-semibold" style="color:var(--color-text-muted)">Top Receita</p>
+          </div>
+          <p class="text-sm font-bold text-[var(--color-text)] leading-tight">
+            {{ medicoTopReceita?.nome ?? '—' }}
+          </p>
+          <p v-if="medicoTopReceita" class="text-xs mt-0.5" style="color:var(--color-text-muted)">
+            {{ fmtBRL(medicoTopReceita.receitaTotal) }}
+          </p>
+        </div>
+      </div>
+
+      <!-- Tabela por médico -->
+      <div class="bg-white rounded-2xl border overflow-hidden" style="border-color:var(--color-border)">
+        <div class="px-5 py-4 border-b font-semibold text-[var(--color-text)]" style="border-color:var(--color-border-light)">
+          Receita por Médico
+        </div>
+        <div v-if="!linhas.length" class="py-12 text-center">
+          <DollarSign :size="32" class="mx-auto mb-3" style="color:var(--color-text-dim)" />
+          <p class="text-sm" style="color:var(--color-text-muted)">Nenhuma consulta no período selecionado</p>
+        </div>
+        <table v-else class="w-full text-sm">
+          <thead>
+            <tr style="background:var(--color-surface-2);border-bottom:1px solid var(--color-border-light)">
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide" style="color:var(--color-text-muted)">Médico</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide hidden sm:table-cell" style="color:var(--color-text-muted)">Especialidade</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide hidden md:table-cell" style="color:var(--color-text-muted)">Valor/Consulta</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide" style="color:var(--color-text-muted)">Consultas</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide" style="color:var(--color-text-muted)">Receita Total</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide hidden lg:table-cell" style="color:var(--color-text-muted)">% do total</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="r in linhas" :key="r.id"
+              class="border-b hover:bg-blue-50 transition-colors"
+              style="border-color:var(--color-border-light)"
+            >
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-2">
+                  <UiAvatar :name="r.nome" size="xs" />
+                  <span class="font-medium text-[var(--color-text)]">{{ r.nome }}</span>
+                </div>
+              </td>
+              <td class="px-4 py-3 hidden sm:table-cell text-sm" style="color:var(--color-text-muted)">{{ r.especialidade }}</td>
+              <td class="px-4 py-3 hidden md:table-cell">
+                <span v-if="r.valorConsulta" class="text-sm font-semibold" style="color:#16a34a">{{ fmtBRL(r.valorConsulta) }}</span>
+                <span v-else class="text-xs px-2 py-0.5 rounded-full" style="background:#fef3c7;color:#d97706">Não definido</span>
+              </td>
+              <td class="px-4 py-3">
+                <span class="text-sm font-bold px-2.5 py-1 rounded-full" style="background:#dbeafe;color:#2563eb">
+                  {{ r.consultas }}
+                </span>
+              </td>
+              <td class="px-4 py-3">
+                <span class="text-sm font-bold" style="color:#16a34a">{{ fmtBRL(r.receitaTotal) }}</span>
+              </td>
+              <td class="px-4 py-3 hidden lg:table-cell">
+                <div class="flex items-center gap-2">
+                  <div class="flex-1 h-1.5 rounded-full overflow-hidden" style="background:#f1f5f9;max-width:80px">
+                    <div
+                      class="h-full rounded-full"
+                      style="background:#2563eb"
+                      :style="`width:${receitaTotal ? Math.round((r.receitaTotal / receitaTotal) * 100) : 0}%`"
+                    />
+                  </div>
+                  <span class="text-xs font-semibold" style="color:var(--color-text-muted)">
+                    {{ receitaTotal ? Math.round((r.receitaTotal / receitaTotal) * 100) : 0 }}%
+                  </span>
+                </div>
+              </td>
+            </tr>
+            <!-- Totais -->
+            <tr style="background:var(--color-surface-2);border-top:2px solid var(--color-border)">
+              <td class="px-4 py-3 font-bold text-[var(--color-text)]" colspan="3">Total</td>
+              <td class="px-4 py-3">
+                <span class="text-sm font-bold px-2.5 py-1 rounded-full" style="background:#dbeafe;color:#2563eb">
+                  {{ totalConsultas }}
+                </span>
+              </td>
+              <td class="px-4 py-3 font-bold text-lg" style="color:#16a34a">{{ fmtBRL(receitaTotal) }}</td>
+              <td class="px-4 py-3 hidden lg:table-cell" />
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Tabela de atendimentos detalhados -->
+      <div class="bg-white rounded-2xl border overflow-hidden" style="border-color:var(--color-border)">
+        <div class="px-5 py-4 border-b font-semibold text-[var(--color-text)]" style="border-color:var(--color-border-light)">
+          Atendimentos individuais <span class="text-sm font-normal" style="color:var(--color-text-muted)">({{ totalDetalhe }} registros)</span>
+        </div>
+        <div v-if="!atendimentos.length" class="py-10 text-center text-sm" style="color:var(--color-text-muted)">
+          Nenhum atendimento no período
+        </div>
+        <table v-else class="w-full text-sm">
+          <thead>
+            <tr style="background:var(--color-surface-2);border-bottom:1px solid var(--color-border-light)">
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide" style="color:var(--color-text-muted)">Data</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide" style="color:var(--color-text-muted)">Paciente</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide hidden md:table-cell" style="color:var(--color-text-muted)">Médico</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide hidden sm:table-cell" style="color:var(--color-text-muted)">Duração</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide" style="color:var(--color-text-muted)">Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="(a, i) in atendimentos" :key="i"
+              class="border-b hover:bg-blue-50 transition-colors"
+              style="border-color:var(--color-border-light)"
+            >
+              <td class="px-4 py-3 text-xs" style="color:var(--color-text-muted)">
+                {{ new Date(a.data).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) }}
+              </td>
+              <td class="px-4 py-3 font-medium text-[var(--color-text)]">{{ a.paciente }}</td>
+              <td class="px-4 py-3 hidden md:table-cell text-sm" style="color:var(--color-text-muted)">{{ a.medico }}</td>
+              <td class="px-4 py-3 hidden sm:table-cell text-xs" style="color:var(--color-text-muted)">
+                {{ a.duracao ? `${a.duracao} min` : '—' }}
+              </td>
+              <td class="px-4 py-3 font-semibold text-sm" style="color:#16a34a">
+                {{ a.valor ? fmtBRL(a.valor) : '—' }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <!-- Paginação -->
+        <div
+          v-if="totalPagDetalhe > 1"
+          class="flex items-center justify-between px-4 py-3"
+          style="border-top:1px solid var(--color-border-light);background:var(--color-surface-2)"
+        >
+          <span class="text-xs" style="color:var(--color-text-muted)">
+            {{ (paginaDetalhe - 1) * POR_PAGINA + 1 }}–{{ Math.min(paginaDetalhe * POR_PAGINA, totalDetalhe) }} de {{ totalDetalhe }}
+          </span>
+          <div class="flex gap-1">
+            <button :disabled="paginaDetalhe === 1" class="p-1.5 rounded-lg disabled:opacity-30" style="background:white;border:1px solid var(--color-border)" @click="paginaDetalhe--"><ChevronLeft :size="15" /></button>
+            <button
+              v-for="p in gerarPaginas(paginaDetalhe, totalPagDetalhe)" :key="p"
+              class="min-w-[32px] h-8 px-2 rounded-lg text-xs font-semibold"
+              :style="p === paginaDetalhe ? 'background:#2563eb;color:white;border:1px solid #2563eb' : p === '...' ? 'background:transparent;color:var(--color-text-dim);cursor:default;border:none' : 'background:white;color:var(--color-text-muted);border:1px solid var(--color-border)'"
+              :disabled="p === '...'"
+              @click="typeof p === 'number' && (paginaDetalhe = p)"
+            >{{ p }}</button>
+            <button :disabled="paginaDetalhe === totalPagDetalhe" class="p-1.5 rounded-lg disabled:opacity-30" style="background:white;border:1px solid var(--color-border)" @click="paginaDetalhe++"><ChevronRight :size="15" /></button>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+</template>
