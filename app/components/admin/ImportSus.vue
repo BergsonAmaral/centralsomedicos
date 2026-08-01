@@ -7,6 +7,7 @@ const arquivo = ref<File | null>(null)
 const arrastando = ref(false)
 const resultado = ref<{ importados: number; erros: number } | null>(null)
 const etapa = ref<'upload' | 'preview' | 'sucesso'>('upload')
+const fileInput = ref<HTMLInputElement | null>(null)
 
 function onDrop(e: DragEvent) {
   arrastando.value = false
@@ -69,7 +70,7 @@ const colunas = [
         @dragover.prevent="arrastando = true"
         @dragleave="arrastando = false"
         @drop.prevent="onDrop"
-        @click="($refs.fileInput as HTMLInputElement).click()"
+        @click="fileInput?.click()"
       >
         <input ref="fileInput" type="file" accept=".csv,.xlsx,.xls" class="hidden" @change="onFileInput" />
         <FileSpreadsheet :size="48" class="mx-auto mb-4 text-[var(--color-blue-light)]" />

@@ -2,6 +2,7 @@
 import {
   LayoutDashboard,
   History,
+  Settings,
   LogOut,
   Stethoscope,
   Menu,
@@ -16,6 +17,7 @@ const sidebarOpen = ref(false)
 const navItems = [
   { label: 'Painel', icon: LayoutDashboard, to: '/medico' },
   { label: 'Histórico', icon: History, to: '/medico/historico' },
+  { label: 'Configurações', icon: Settings, to: '/medico/configuracoes' },
 ]
 
 function isActive(to: string) {
@@ -33,23 +35,17 @@ async function logout() {
   <div class="flex h-screen overflow-hidden" style="background:#f8fafc">
 
     <!-- ── SIDEBAR DESKTOP ── -->
-    <aside class="hidden lg:flex flex-col w-56 shrink-0" style="background:#0c1a14;border-right:1px solid #14532d">
+    <aside class="hidden lg:flex flex-col w-56 shrink-0" style="background:#0c1525;border-right:1px solid #1e2d4a">
 
       <!-- Logo -->
       <div class="px-4 pt-5 pb-4">
-        <div class="flex items-center gap-3">
-          <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
-               style="background:linear-gradient(135deg,#059669,#2563eb)">
-            <Stethoscope :size="15" class="text-white" />
-          </div>
-          <div>
-            <p class="font-bold text-white text-sm leading-tight tracking-tight">SoMedicos</p>
-            <p class="text-[10px] font-medium uppercase tracking-widest" style="color:#4ade80">Painel Médico</p>
-          </div>
+        <div class="bg-white/95 rounded-xl px-3 py-2 flex items-center justify-center">
+          <img src="/logo.png" alt="Central SóMedicos" class="h-16 w-auto" />
         </div>
+        <p class="text-[10px] font-medium text-center mt-1.5 uppercase tracking-widest" style="color:#3dc4a4">Painel Médico</p>
       </div>
 
-      <div class="mx-3 mb-2" style="height:1px;background:#14532d" />
+      <div class="mx-3 mb-2" style="height:1px;background:#1e2d4a" />
 
       <!-- Nav -->
       <nav class="flex-1 px-2 py-1 space-y-0.5">
@@ -59,33 +55,33 @@ async function logout() {
           :to="item.to"
           class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium relative"
           :style="isActive(item.to)
-            ? 'background:rgba(16,185,129,0.15);color:#34d399'
-            : 'color:#4ade8099'"
+            ? 'background:rgba(45,170,138,0.15);color:#3dc4a4'
+            : 'color:#4d7da880'"
         >
           <span
             v-if="isActive(item.to)"
             class="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full"
-            style="background:#10b981"
+            style="background:#2daa8a"
           />
           <component :is="item.icon" :size="15"
-            :style="isActive(item.to) ? 'color:#10b981' : 'color:#166534'" />
+            :style="isActive(item.to) ? 'color:#2daa8a' : 'color:#2d4a6a'" />
           {{ item.label }}
         </NuxtLink>
       </nav>
 
       <!-- Perfil -->
       <div class="mt-auto">
-        <div class="mx-3 mb-2" style="height:1px;background:#14532d" />
+        <div class="mx-3 mb-2" style="height:1px;background:#1e2d4a" />
         <div class="px-2 pb-4 space-y-1">
-          <div class="flex items-center gap-2.5 px-3 py-2.5 rounded-lg" style="background:#14532d">
+          <div class="flex items-center gap-2.5 px-3 py-2.5 rounded-lg" style="background:#1e2d4a">
             <UiAvatar :src="authStore.medicoData?.foto_url" :name="authStore.profile?.nome" size="sm" />
             <div class="min-w-0 flex-1">
               <p class="text-xs font-semibold text-white truncate">{{ authStore.profile?.nome }}</p>
-              <p class="text-[10px] font-medium truncate" style="color:#4ade80">{{ authStore.medicoData?.especialidade }}</p>
+              <p class="text-[10px] font-medium truncate" style="color:#3dc4a4">{{ authStore.medicoData?.especialidade }}</p>
             </div>
           </div>
           <button
-            class="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors hover:bg-[#14532d]"
+            class="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors hover:bg-[#1e2d4a]"
             style="color:#f87171"
             @click="logout"
           >
@@ -106,16 +102,14 @@ async function logout() {
     <!-- ── SIDEBAR MOBILE ── -->
     <Transition name="slide-right">
       <aside v-if="sidebarOpen" class="fixed inset-y-0 left-0 z-50 w-56 flex flex-col lg:hidden"
-             style="background:#0c1a14">
-        <div class="px-4 py-4 flex items-center justify-between" style="border-bottom:1px solid #14532d">
+             style="background:#0c1525">
+        <div class="px-4 py-4 flex items-center justify-between" style="border-bottom:1px solid #1e2d4a">
           <div class="flex items-center gap-2.5">
-            <div class="w-7 h-7 rounded-xl flex items-center justify-center"
-                 style="background:linear-gradient(135deg,#059669,#2563eb)">
-              <Stethoscope :size="13" class="text-white" />
+            <div class="bg-white/95 rounded-lg px-2 py-1">
+              <img src="/logo.png" alt="Central SóMedicos" class="h-12 w-auto" />
             </div>
-            <span class="font-bold text-white text-sm tracking-tight">SoMedicos</span>
           </div>
-          <button class="text-green-400 hover:text-white transition-colors" @click="sidebarOpen = false">
+          <button class="text-[#3dc4a4] hover:text-white transition-colors" @click="sidebarOpen = false">
             <X :size="18" />
           </button>
         </div>
@@ -125,7 +119,7 @@ async function logout() {
             :key="item.to"
             :to="item.to"
             class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium"
-            :style="isActive(item.to) ? 'background:rgba(16,185,129,0.15);color:#34d399' : 'color:#166534'"
+            :style="isActive(item.to) ? 'background:rgba(45,170,138,0.15);color:#3dc4a4' : 'color:#2d4a6a'"
             @click="sidebarOpen = false"
           >
             <component :is="item.icon" :size="15" />
@@ -148,7 +142,7 @@ async function logout() {
         <button class="text-slate-400 hover:text-slate-700 transition-colors" @click="sidebarOpen = true">
           <Menu :size="20" />
         </button>
-        <span class="font-bold text-slate-900 text-sm tracking-tight">SoMedicos</span>
+        <img src="/logo.png" alt="Central SóMedicos" class="h-14 w-auto" />
       </header>
       <main id="medico-main" class="flex-1 overflow-hidden p-5 lg:p-6 relative">
         <div class="h-full overflow-y-auto">
@@ -160,9 +154,9 @@ async function logout() {
 </template>
 
 <style scoped>
-nav a:not([style*="color:#34d399"]):hover {
+nav a:not([style*="color:#3dc4a4"]):hover {
   background: rgba(255,255,255,0.06);
-  color: #86efac;
+  color: #a8d4cc;
 }
 .fade-enter-active, .fade-leave-active { transition: opacity 200ms ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }

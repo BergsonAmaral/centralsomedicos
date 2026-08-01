@@ -11,6 +11,7 @@ const props = defineProps<{
   medicoNome: string
   medicoCRM: string
   medicoEspecialidade: string
+  medicoAssinaturaUrl?: string | null
 }>()
 
 const { gerarESalvar } = useDocumentos()
@@ -74,6 +75,7 @@ async function gerar() {
         nome: props.medicoNome,
         crm: props.medicoCRM,
         especialidade: props.medicoEspecialidade,
+        assinatura_url: props.medicoAssinaturaUrl ?? null,
       },
       agendamentoId: props.agendamento.id,
     })

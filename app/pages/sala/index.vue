@@ -29,8 +29,8 @@ function getHoje() {
 async function buscarPacienteAtivo() {
   const { data } = await supabase
     .from('agendamentos')
-    .select('*, pacientes(nome), medicos(id, nome, especialidade, sala_slug, crm, foto_url, ativo, pausado)')
-    .in('status', ['aguardando_paciente', 'em_consulta'])
+    .select('*, pacientes(nome), medicos(id, nome, especialidade, sala_slug, crm, foto_url, ativo, pausado, user_id, valor_consulta, assinatura_url, created_at)')
+    .in('status', ['aguardando_medico', 'aguardando_paciente', 'em_consulta', 'aguardando_avaliacao'])
     .eq('data_consulta', getHoje())
     .order('chamado_em', { ascending: false })
     .limit(1)
@@ -38,7 +38,7 @@ async function buscarPacienteAtivo() {
 
   if (data) {
     pacienteAtual.value = data
-  } else if (!pacienteAtual.value || !['aguardando_paciente', 'em_consulta'].includes(pacienteAtual.value.status)) {
+  } else if (!pacienteAtual.value || !['aguardando_medico', 'aguardando_paciente', 'em_consulta', 'aguardando_avaliacao'].includes(pacienteAtual.value.status)) {
     pacienteAtual.value = null
   }
 }
@@ -60,10 +60,10 @@ onMounted(async () => {
       'postgres_changes',
       { event: 'UPDATE', schema: 'public', table: 'agendamentos' },
       async (payload) => {
-        if (['aguardando_paciente', 'em_consulta'].includes(payload.new.status)) {
+        if (['aguardando_medico', 'aguardando_paciente', 'em_consulta', 'aguardando_avaliacao'].includes(payload.new.status)) {
           await buscarPacienteAtivo()
         }
-        if (['aguardando_avaliacao', 'concluido', 'cancelado', 'faltou', 'checkin'].includes(payload.new.status)) {
+        if (['concluido', 'cancelado', 'faltou', 'checkin'].includes(payload.new.status)) {
           if (pacienteAtual.value?.id === payload.new.id) {
             pacienteAtual.value = null
           }
@@ -106,23 +106,23 @@ async function entrarConsulta() {
       style="background:linear-gradient(135deg,#0c2340 0%,#1a4a7a 100%)"
     >
       <header class="flex items-center justify-between px-10 py-6 shrink-0">
-        <p class="text-white/60 text-sm font-mono tracking-widest uppercase">SoMedicos</p>
-        <p class="text-white font-mono text-2xl font-bold tracking-widest">{{ horaAtual }}</p>
+        <p class="text-sm font-mono tracking-widest uppercase" style="color:rgba(255,255,255,0.6)">SoMedicos</p>
+        <p class="font-mono text-2xl font-bold tracking-widest" style="color:#ffffff">{{ horaAtual }}</p>
       </header>
 
       <div class="flex-1 flex flex-col items-center justify-center gap-8 px-10 text-center">
         <div class="relative">
-          <div class="w-32 h-32 rounded-full bg-white/10 flex items-center justify-center">
+          <div class="w-32 h-32 rounded-full flex items-center justify-center" style="background:rgba(255,255,255,0.1)">
             <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.8)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="8" r="4" /><path d="M20 21a8 8 0 1 0-16 0" />
             </svg>
           </div>
-          <div class="absolute inset-0 rounded-full border-2 border-white/20 animate-ping" />
-          <div class="absolute inset-[-12px] rounded-full border border-white/10 animate-ping" style="animation-delay:0.3s" />
+          <div class="absolute inset-0 rounded-full animate-ping" style="border:2px solid rgba(255,255,255,0.2)" />
+          <div class="absolute rounded-full animate-ping" style="inset:-12px;border:1px solid rgba(255,255,255,0.1);animation-delay:0.3s" />
         </div>
         <div>
-          <h1 class="text-5xl font-bold text-white mb-4">Aguardando chamada...</h1>
-          <p class="text-white/60 text-xl">Fique à vontade. Você será chamado em breve.</p>
+          <h1 class="text-5xl font-bold mb-4" style="color:#ffffff">Aguardando chamada...</h1>
+          <p class="text-xl" style="color:rgba(255,255,255,0.6)">Fique à vontade. Você será chamado em breve.</p>
         </div>
       </div>
     </div>

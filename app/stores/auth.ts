@@ -13,32 +13,45 @@ export const useAuthStore = defineStore('auth', () => {
   const isMedico = computed(() => profile.value?.role === 'medico')
   const medicoId = computed(() => medicoData.value?.id ?? null)
 
+  // Evita múltiplas chamadas simultâneas ao banco
+  let _loadingPromise: Promise<void> | null = null
+
   async function loadProfile(force = false) {
-    // Se já carregado e não forçado, usa cache do store
+    // Cache hit — retorna imediatamente sem rede
     if (profile.value && !force) return
 
-    const { data: { user: authUser } } = await supabase.auth.getUser()
-    if (!authUser) return
-    loading.value = true
-    try {
-      const { data } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', authUser.id)
-        .single()
-      profile.value = data
+    // Se já há uma carga em andamento, aguarda a mesma promise
+    if (_loadingPromise) return _loadingPromise
 
-      if (data?.role === 'medico') {
-        const { data: med } = await supabase
-          .from('medicos')
+    // Usa o user reativo (já em memória, sem chamada de rede)
+    const authUser = user.value
+    if (!authUser) return
+
+    loading.value = true
+    _loadingPromise = (async () => {
+      try {
+        const { data } = await supabase
+          .from('profiles')
           .select('*')
-          .eq('user_id', authUser.id)
+          .eq('id', authUser.id)
           .single()
-        medicoData.value = med
+        profile.value = data
+
+        if (data?.role === 'medico') {
+          const { data: med } = await supabase
+            .from('medicos')
+            .select('*')
+            .eq('user_id', authUser.id)
+            .single()
+          medicoData.value = med
+        }
+      } finally {
+        loading.value = false
+        _loadingPromise = null
       }
-    } finally {
-      loading.value = false
-    }
+    })()
+
+    return _loadingPromise
   }
 
   async function logout() {
@@ -47,9 +60,15 @@ export const useAuthStore = defineStore('auth', () => {
     medicoData.value = null
   }
 
-  // Carrega ao montar se já autenticado
-  if (import.meta.client && user.value) {
-    loadProfile()
+  // Carrega assim que o user fica disponível (evita espera no middleware)
+  if (import.meta.client) {
+    if (user.value) {
+      loadProfile()
+    } else {
+      const stop = watch(user, (u) => {
+        if (u) { loadProfile(); stop() }
+      })
+    }
   }
 
   return {

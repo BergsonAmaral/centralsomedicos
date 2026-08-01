@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Agendamento, Medico, Sala } from '~/types'
+import type { Agendamento, Medico } from '~/types'
 
 definePageMeta({ layout: 'sala' })
 
@@ -7,14 +7,11 @@ const route = useRoute()
 const slug = route.params.slug as string
 const supabase = useSupabaseClient()
 
-// Estado
-const sala = ref<Sala | null>(null)
 const medico = ref<Medico | null>(null)
 const pacienteAtual = ref<Agendamento | null>(null)
 const horaAtual = ref('')
 const erro = ref('')
 
-// Relógio + polling
 let clockInterval: ReturnType<typeof setInterval>
 let pollingInterval: ReturnType<typeof setInterval>
 
@@ -33,93 +30,75 @@ function getHoje() {
 }
 
 async function buscarPacienteAtivo() {
+  if (!medico.value) return
   const { data } = await supabase
     .from('agendamentos')
-    .select('*, pacientes(nome)')
-    .eq('sala_slug', slug)
-    .in('status', ['aguardando_paciente', 'em_consulta'])
+    .select('*, pacientes(nome), medicos(id, nome, especialidade)')
+    .eq('medico_id', medico.value.id)
+    .in('status', ['aguardando_medico', 'aguardando_paciente', 'em_consulta', 'aguardando_avaliacao'])
     .eq('data_consulta', getHoje())
     .maybeSingle()
 
-  if (data) {
-    pacienteAtual.value = data
-  } else if (!pacienteAtual.value || !['aguardando_paciente','em_consulta'].includes(pacienteAtual.value.status)) {
-    pacienteAtual.value = null
-  }
+  pacienteAtual.value = data ?? null
 }
 
-// Buscar sala pelo slug → médico associado
-const { data: salaData } = await useAsyncData(
-  `sala-${slug}`,
+// Buscar médico pelo sala_slug
+const { data: medicoData } = await useAsyncData(
+  `medico-sala-${slug}`,
   async () => {
     const { data } = await supabase
-      .from('salas')
-      .select('*, medicos(id, nome, especialidade, foto_url, sala_slug)')
-      .eq('slug', slug)
+      .from('medicos')
+      .select('*')
+      .eq('sala_slug', slug)
       .eq('ativo', true)
       .single()
     return data ?? null
   }
 )
 
-// Fallback: compatibilidade com medicos que usam sala_slug antigo
-if (!salaData.value) {
-  const { data: medicoLegado } = await supabase
-    .from('medicos')
-    .select('id, nome, especialidade, foto_url, sala_slug')
-    .eq('sala_slug', slug)
-    .eq('ativo', true)
-    .maybeSingle()
-  if (medicoLegado) {
-    medico.value = medicoLegado as Medico
-  } else {
-    erro.value = 'Sala não encontrada ou inativa.'
-  }
+if (!medicoData.value) {
+  erro.value = 'Sala não encontrada ou médico inativo.'
 } else {
-  sala.value = salaData.value as any
-  medico.value = (salaData.value as any).medicos as Medico
-}
+  medico.value = medicoData.value as Medico
 
-if (medico.value || sala.value) {
-  // Verificar se já há paciente ativo nesta sala agora
   const { data: ativo } = await supabase
     .from('agendamentos')
-    .select('*, pacientes(nome)')
-    .eq('sala_slug', slug)
-    .in('status', ['aguardando_paciente', 'em_consulta'])
+    .select('*, pacientes(nome), medicos(id, nome, especialidade)')
+    .eq('medico_id', medico.value.id)
+    .in('status', ['aguardando_medico', 'aguardando_paciente', 'em_consulta', 'aguardando_avaliacao'])
     .eq('data_consulta', getHoje())
     .maybeSingle()
 
   if (ativo) pacienteAtual.value = ativo
 }
 
-// Realtime — escuta agendamentos desta sala (por sala_slug)
 onMounted(() => {
   atualizarHora()
   clockInterval = setInterval(atualizarHora, 1000)
-  // Polling a cada 3s — fallback quando Realtime demora
   pollingInterval = setInterval(buscarPacienteAtivo, 3000)
 
+  if (!medico.value) return
+
   supabase
-    .channel(`sala-slug-${slug}`)
+    .channel(`sala-medico-${medico.value.id}`)
     .on(
       'postgres_changes',
       {
         event: 'UPDATE',
         schema: 'public',
         table: 'agendamentos',
-        filter: `sala_slug=eq.${slug}`,
+        filter: `medico_id=eq.${medico.value.id}`,
       },
       async (payload) => {
-        if (['aguardando_paciente', 'em_consulta'].includes(payload.new.status)) {
+        if (['aguardando_medico', 'aguardando_paciente', 'em_consulta', 'aguardando_avaliacao'].includes(payload.new.status)) {
           const { data } = await supabase
             .from('agendamentos')
-            .select('*, pacientes(nome)')
+            .select('*, pacientes(nome), medicos(id, nome, especialidade)')
             .eq('id', payload.new.id)
             .single()
           pacienteAtual.value = data
         }
-        if (['aguardando_avaliacao', 'concluido', 'cancelado', 'faltou', 'checkin', 'aguardando_medico'].includes(payload.new.status)) {
+        if (['concluido', 'cancelado', 'faltou', 'checkin', 'agendado'].includes(payload.new.status)) {
           if (pacienteAtual.value?.id === payload.new.id) {
             pacienteAtual.value = null
           }
@@ -146,8 +125,7 @@ async function entrarConsulta() {
 
 <template>
   <div class="w-screen h-screen overflow-hidden select-none">
-    <!-- Erro -->
-    <div v-if="erro" class="flex items-center justify-center h-full bg-[#0c2340] text-white text-2xl">
+    <div v-if="erro" class="flex items-center justify-center h-full text-white text-2xl font-bold" style="background:#071526">
       {{ erro }}
     </div>
 

@@ -22,6 +22,7 @@ export interface Medico {
   ativo: boolean
   pausado: boolean
   valor_consulta: number | null
+  assinatura_url: string | null
   created_at: string
 }
 
@@ -48,7 +49,20 @@ export type AgendamentoStatus =
   | 'faltou'
   | 'cancelado'
 
-export interface Triagem {
+export interface SinaisVitais {
+  pressao_sistolica?: number | null   // mmHg
+  pressao_diastolica?: number | null  // mmHg
+  pulso?: number | null               // bpm
+  temperatura?: number | null         // °C
+  saturacao?: number | null           // % SpO2
+  peso?: number | null                // kg
+  altura?: number | null              // cm
+  glicemia?: number | null            // mg/dL
+  gordura_percentual?: number | null  // %
+  imc?: number | null                 // kg/m²
+}
+
+export interface Triagem extends SinaisVitais {
   alergia: boolean
   febre: boolean
   urgencia: boolean
@@ -72,18 +86,7 @@ export interface Agendamento {
   created_at: string
   // Relações
   pacientes?: Paciente
-  medicos?: Pick<Medico, 'id' | 'nome' | 'especialidade' | 'sala_slug' | 'crm'>
-}
-
-export interface Sala {
-  id: string
-  slug: string
-  nome: string
-  medico_id: string | null
-  ativo: boolean
-  created_at: string
-  // Relação
-  medicos?: Pick<Medico, 'id' | 'nome' | 'especialidade'>
+  medicos?: Pick<Medico, 'id' | 'nome' | 'especialidade' | 'sala_slug' | 'crm' | 'pausado'>
 }
 
 export interface Consulta {
@@ -129,17 +132,6 @@ export interface Documento {
   pacientes?: Paciente
   medicos?: Medico
   consultas?: Consulta
-}
-
-export interface ImportacaoSus {
-  id: string
-  admin_id: string | null
-  arquivo_nome: string | null
-  total_linhas: number | null
-  importados: number | null
-  erros: number | null
-  erros_detalhe: Array<{ linha: number; motivo: string }> | null
-  created_at: string
 }
 
 // =============================================

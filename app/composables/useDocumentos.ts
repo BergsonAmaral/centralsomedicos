@@ -38,6 +38,62 @@ export const useDocumentos = () => {
 
     const { medico, paciente, titulo, corpo, tipo, consultaId } = options
 
+    // Converte imagem de URL para base64 para embutir no PDF
+    async function urlParaBase64(url: string): Promise<string | null> {
+      try {
+        const res = await fetch(url)
+        const blob = await res.blob()
+        return await new Promise((resolve) => {
+          const reader = new FileReader()
+          reader.onloadend = () => resolve(reader.result as string)
+          reader.onerror = () => resolve(null)
+          reader.readAsDataURL(blob)
+        })
+      } catch {
+        return null
+      }
+    }
+
+    // Bloco de assinatura no rodapé
+    const assinaturaBase64 = (medico as any).assinatura_url
+      ? await urlParaBase64((medico as any).assinatura_url)
+      : null
+
+    const cidadeData = `${new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })}`
+
+    const blocoAssinatura: unknown[] = [
+      '\n\n',
+      { text: cidadeData, alignment: 'right', fontSize: 10, color: '#475569' },
+      '\n',
+      ...(assinaturaBase64
+        ? [
+            {
+              image: assinaturaBase64,
+              width: 160,
+              alignment: 'center',
+              margin: [0, 0, 0, 2],
+            } as unknown,
+          ]
+        : [
+            {
+              canvas: [{ type: 'line', x1: 140, y1: 0, x2: 375, y2: 0, lineWidth: 0.7, lineColor: '#94a3b8' }],
+              margin: [0, 24, 0, 2],
+            } as unknown,
+          ]),
+      {
+        text: `Dr(a). ${medico.nome}`,
+        bold: true,
+        alignment: 'center',
+        fontSize: 11,
+      },
+      {
+        text: `CRM: ${medico.crm} — ${medico.especialidade}`,
+        alignment: 'center',
+        fontSize: 10,
+        color: '#475569',
+      },
+    ]
+
     const docDef = {
       content: [
         { text: 'SoMedicos — Teleconsultas', style: 'clinica' },
@@ -70,7 +126,8 @@ export const useDocumentos = () => {
         { text: titulo, style: 'titulo' },
         '\n',
         ...(corpo as unknown[]),
-        '\n\n',
+        ...blocoAssinatura,
+        '\n',
         {
           canvas: [
             {
@@ -121,7 +178,7 @@ export const useDocumentos = () => {
 
     if (uploadError) {
       console.error('Erro upload PDF:', uploadError)
-      return null
+      throw new Error(`Falha no upload do PDF: ${uploadError.message}`)
     }
 
     const { data: urlData } = supabase.storage.from('documentos').getPublicUrl(path)
@@ -251,12 +308,13 @@ export const useDocumentos = () => {
     tipo: DocumentoTipo
     conteudo: any
     paciente: { id: string, nome: string, cpf: string, data_nascimento?: string | null, sus_cartao?: string | null }
-    medico: { id: string, nome: string, crm: string, especialidade: string }
+    medico: { id: string, nome: string, crm: string, especialidade: string, assinatura_url?: string | null }
     agendamentoId: string  // usado para nomear o arquivo (não vai para a coluna consulta_id)
   }): Promise<{ ok: boolean, pdfUrl: string | null, error?: string }> {
     try {
       const { titulo, corpo } = montarCorpo(opts.tipo, opts.conteudo) ?? { titulo: '', corpo: [] }
 
+      // gerarEFazerUpload lança erro se o upload falhar (não retorna null)
       const pdfUrl = await gerarEFazerUpload({
         tipo: opts.tipo,
         consultaId: opts.agendamentoId,
@@ -265,6 +323,10 @@ export const useDocumentos = () => {
         titulo,
         corpo,
       })
+
+      if (!pdfUrl) {
+        return { ok: false, pdfUrl: null, error: 'URL do PDF não retornada pelo storage' }
+      }
 
       // Salva no banco vinculado ao agendamento. consulta_id será preenchido
       // quando o médico encerrar a consulta (vide encerrarConsulta).
@@ -278,7 +340,7 @@ export const useDocumentos = () => {
         pdfUrl,
       })
 
-      if (error) return { ok: false, pdfUrl, error: error.message }
+      if (error) return { ok: false, pdfUrl: null, error: error.message }
       return { ok: true, pdfUrl }
     } catch (err: any) {
       return { ok: false, pdfUrl: null, error: err?.message ?? 'Erro ao gerar documento' }

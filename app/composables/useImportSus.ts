@@ -1,5 +1,3 @@
-import * as XLSX from 'xlsx'
-import Papa from 'papaparse'
 import type { LinhaSus, ErroimportSus } from '~/types'
 
 export const useImportSus = () => {
@@ -23,11 +21,13 @@ export const useImportSus = () => {
 
     if (ext === 'csv') {
       const texto = await file.text()
+      const { default: Papa } = await import('papaparse')
       linhas = Papa.parse<LinhaSus>(texto, {
         header: true,
         skipEmptyLines: true,
       }).data
     } else {
+      const { default: XLSX } = await import('xlsx')
       const buf = await file.arrayBuffer()
       const wb = XLSX.read(buf)
       linhas = XLSX.utils.sheet_to_json<LinhaSus>(wb.Sheets[wb.SheetNames[0]])

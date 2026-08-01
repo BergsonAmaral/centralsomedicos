@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { definePageMeta } from '#imports'
 import { Filter, LayoutGrid, CalendarRange } from 'lucide-vue-next'
 import { useFila } from '~/composables/useFila'
 

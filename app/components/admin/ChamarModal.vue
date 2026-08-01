@@ -17,31 +17,26 @@ const carregando = ref(false)
 const paciente = computed(() => props.agendamento.pacientes)
 
 // Lista de médicos disponíveis
-interface MedicoOpcao { id: string; nome: string; especialidade: string; ativo: boolean; pausado: boolean }
+interface MedicoOpcao { id: string; nome: string; especialidade: string; ativo: boolean; pausado: boolean; sala_slug: string | null }
 const medicos = ref<MedicoOpcao[]>([])
 const medicoSelecionadoId = ref(props.agendamento.medico_id)
 
-// Salas (espaços físicos — independentes do médico)
-interface SalaOpcao { id: string; slug: string; nome: string }
-const salas = ref<SalaOpcao[]>([])
-const salaSelecionadaSlug = ref<string | null>(props.agendamento.sala_slug ?? null)
-
 onMounted(async () => {
-  const [{ data: mData }, { data: sData }] = await Promise.all([
-    supabase.from('medicos').select('id, nome, especialidade, ativo, pausado').eq('ativo', true).order('nome'),
-    supabase.from('salas').select('id, slug, nome').eq('ativo', true).order('nome'),
-  ])
+  const { data: mData } = await supabase
+    .from('medicos')
+    .select('id, nome, especialidade, ativo, pausado, sala_slug')
+    .eq('ativo', true)
+    .order('nome')
   medicos.value = mData ?? []
-  salas.value = sData ?? []
   medicoSelecionadoId.value = props.agendamento.medico_id
-  // Auto-seleciona se só tem 1 sala
-  if (salas.value.length === 1) salaSelecionadaSlug.value = salas.value[0].slug
-  else if (!salas.value.find(s => s.slug === salaSelecionadaSlug.value)) salaSelecionadaSlug.value = null
 })
 
 const medicoSelecionado = computed(() =>
   medicos.value.find(m => m.id === medicoSelecionadoId.value) ?? null
 )
+
+// Sala é sempre a sala do médico selecionado
+const salaSelecionadaSlug = computed(() => medicoSelecionado.value?.sala_slug ?? null)
 
 async function confirmar() {
   carregando.value = true
@@ -110,46 +105,28 @@ async function confirmar() {
         </p>
       </div>
 
-      <!-- Seletor de sala -->
+      <!-- Sala automática do médico -->
       <div>
         <label class="block text-sm font-semibold text-[var(--color-text)] mb-2 flex items-center gap-1.5">
           <DoorOpen :size="16" style="color:#7c3aed" />
           Sala de atendimento
         </label>
-
-        <!-- Sem salas -->
-        <div v-if="salas.length === 0" class="text-xs p-3 rounded-lg" style="background:#fef9c3;color:#854d0e">
-          ⚠️ Nenhuma sala cadastrada. Crie as unidades em <strong>Admin → Salas</strong> (ex: Sobral, Fortaleza).
-        </div>
-
-        <!-- 1 sala → automático -->
-        <div
-          v-else-if="salas.length === 1"
+        <div v-if="salaSelecionadaSlug"
           class="flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm"
           style="background:#f5f3ff;border-color:#ddd6fe;color:#5b21b6"
         >
           <DoorOpen :size="15" style="color:#7c3aed;flex-shrink:0" />
-          <span class="font-semibold">{{ salas[0].nome }}</span>
+          <span class="font-semibold">/sala/{{ salaSelecionadaSlug }}</span>
           <span class="ml-auto text-xs px-2 py-0.5 rounded-full font-medium" style="background:#ede9fe;color:#7c3aed">automático</span>
         </div>
-
-        <!-- 2+ salas → picker -->
-        <div v-else class="flex flex-wrap gap-2">
-          <button
-            v-for="s in salas" :key="s.slug"
-            type="button"
-            class="px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all"
-            :style="salaSelecionadaSlug === s.slug
-              ? 'background:#7c3aed;color:white;border-color:#7c3aed'
-              : 'background:white;color:var(--color-text-muted);border-color:var(--color-border)'"
-            @click="salaSelecionadaSlug = s.slug"
-          >{{ s.nome }}</button>
+        <div v-else class="text-xs p-3 rounded-lg" style="background:#fef9c3;color:#854d0e">
+          ⚠️ Este médico não tem sala configurada. Edite o cadastro dele em <strong>Admin → Médicos</strong> e defina o slug da sala.
         </div>
       </div>
 
       <!-- Aviso -->
       <p class="text-xs text-[var(--color-text-muted)] bg-[var(--color-surface-2)] p-3 rounded-lg border border-[var(--color-border-light)]">
-        ℹ️ O médico receberá um aviso para aceitar. A tela da sala selecionada exibirá o nome do paciente chamado.
+        ℹ️ O médico receberá um aviso para aceitar. A tela da sala dele exibirá o nome do paciente chamado.
       </p>
     </div>
 

@@ -3,7 +3,6 @@ import { createClient } from '@supabase/supabase-js'
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
 
-  // Verifica se o chamador é admin via anon client (cookie de sessão)
   const supabaseUrl = process.env.SUPABASE_URL!
   const supabaseKey = process.env.SUPABASE_KEY!
   const serviceKey = config.supabaseServiceKey
@@ -12,8 +11,23 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 500, message: 'Service key não configurada' })
   }
 
+  // Verifica se o chamador é admin autenticado
+  const callerClient = useSupabaseClient(event)
+  const { data: { user }, error: authError } = await callerClient.auth.getUser()
+  if (authError || !user) {
+    throw createError({ statusCode: 401, message: 'Não autenticado' })
+  }
+  const { data: callerProfile } = await callerClient
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+  if (callerProfile?.role !== 'admin') {
+    throw createError({ statusCode: 403, message: 'Acesso negado' })
+  }
+
   const body = await readBody(event)
-  const { nome, crm, especialidade, email, senha, foto_url, valor_consulta } = body
+  const { nome, crm, especialidade, email, senha, foto_url, valor_consulta, sala_slug } = body
 
   if (!email || !senha || !nome || !crm || !especialidade) {
     throw createError({ statusCode: 400, message: 'Campos obrigatórios faltando' })
@@ -29,14 +43,14 @@ export default defineEventHandler(async (event) => {
   })
 
   // 1. Criar usuário no Auth
-  const { data: authData, error: authError } = await admin.auth.admin.createUser({
+  const { data: authData, error: createAuthError } = await admin.auth.admin.createUser({
     email,
     password: senha,
     email_confirm: true, // confirma automaticamente (sem precisar de e-mail)
   })
 
-  if (authError) {
-    throw createError({ statusCode: 400, message: authError.message })
+  if (createAuthError) {
+    throw createError({ statusCode: 400, message: createAuthError.message })
   }
 
   const userId = authData.user.id
@@ -61,6 +75,7 @@ export default defineEventHandler(async (event) => {
       ativo: true,
       pausado: false,
       valor_consulta: valor_consulta ?? 0,
+      sala_slug: sala_slug || null,
     })
 
     if (medicoError) throw medicoError

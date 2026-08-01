@@ -19,10 +19,19 @@ export const useFila = () => {
   // Posição calculada dinamicamente — nunca campo salvo
   const getPosicao = (id: string) => filaStore.getPosicao(id)
 
+  // Colunas mínimas necessárias — evita buscar campos pesados desnecessariamente
+  const SELECT_COLS = [
+    'id', 'status', 'data_consulta', 'motivo', 'observacoes', 'origem',
+    'checkin_em', 'chamado_em', 'encerrado_em', 'triagem', 'sala_slug',
+    'paciente_id', 'medico_id', 'created_at',
+    'pacientes(id,nome,cpf,data_nascimento,sexo,telefone,email,sus_cartao)',
+    'medicos(id,nome,especialidade,sala_slug,crm,pausado)',
+  ].join(',')
+
   async function carregar(medicoId?: string | null) {
     let q = supabase
       .from('agendamentos')
-      .select('*, pacientes(*), medicos(id, nome, especialidade, meet_link, sala_slug, crm, pausado)')
+      .select(SELECT_COLS)
       .eq('data_consulta', dataHoje())
 
     if (medicoId) q = q.eq('medico_id', medicoId)
@@ -30,19 +39,42 @@ export const useFila = () => {
     const { data } = await q
     if (!data) return
 
-    filaStore.agendados = data.filter((a: Agendamento) => a.status === 'agendado')
-    filaStore.finalizados = data.filter((a: Agendamento) =>
+    _distribuirNaStore(data as Agendamento[])
+  }
+
+  function _distribuirNaStore(data: Agendamento[]) {
+    filaStore.agendados = data.filter((a) => a.status === 'agendado')
+    filaStore.finalizados = data.filter((a) =>
       ['concluido', 'faltou', 'cancelado', 'aguardando_avaliacao'].includes(a.status)
     )
     filaStore.filaAtiva = data
-      .filter((a: Agendamento) =>
+      .filter((a) =>
         ['checkin', 'aguardando_medico', 'aguardando_paciente', 'em_consulta'].includes(a.status)
       )
       .sort(
-        (a: Agendamento, b: Agendamento) =>
+        (a, b) =>
           new Date(a.checkin_em ?? a.created_at).getTime() -
           new Date(b.checkin_em ?? b.created_at).getTime()
       )
+  }
+
+  // Aplica patch de um registro já carregado — evita recarregar tudo
+  async function _patchRegistro(id: string) {
+    const { data } = await supabase
+      .from('agendamentos')
+      .select(SELECT_COLS)
+      .eq('id', id)
+      .single()
+    if (!data) return
+
+    const ag = data as Agendamento
+    const todas = [
+      ...filaStore.agendados,
+      ...filaStore.filaAtiva,
+      ...filaStore.finalizados,
+    ]
+    const semEste = todas.filter((a) => a.id !== id)
+    _distribuirNaStore([...semEste, ag])
   }
 
   async function fazerCheckin(id: string, triagem: Triagem) {
@@ -121,7 +153,17 @@ export const useFila = () => {
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'agendamentos' },
-        () => carregar(medicoId)
+        (payload) => {
+          const id = payload.new?.id
+          // Se o registro já está na store, só atualiza ele (mais rápido)
+          // Se é novo (INSERT via upsert) ou não está na store, recarrega tudo
+          const todas = [...filaStore.agendados, ...filaStore.filaAtiva, ...filaStore.finalizados]
+          if (id && todas.some((a) => a.id === id)) {
+            _patchRegistro(id)
+          } else {
+            carregar(medicoId)
+          }
+        }
       )
       .on(
         'postgres_changes',

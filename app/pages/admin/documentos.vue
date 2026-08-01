@@ -173,15 +173,28 @@ async function confirmarEnvio() {
   if (!enviarModal.value) return
   enviandoLoading.value = true
   try {
-    await $fetch('/api/documentos/send', {
-      method: 'POST',
-      body: {
-        documentoId: enviarModal.value.id,
-        canal: enviandoCanal.value,
-        telefone: enviandoTelefone.value,
-        email: enviandoEmail.value,
+    const result = await $fetch<{ success: boolean; whatsappUrl?: string; erros?: string[] }>(
+      '/api/documentos/send',
+      {
+        method: 'POST',
+        body: {
+          documentoId: enviarModal.value.id,
+          canal: enviandoCanal.value,
+          telefone: enviandoTelefone.value,
+          email: enviandoEmail.value,
+        },
       },
-    })
+    )
+
+    // Abre WhatsApp em nova aba se retornou o link
+    if (result.whatsappUrl) {
+      window.open(result.whatsappUrl, '_blank', 'noopener,noreferrer')
+    }
+
+    if (result.erros?.length) {
+      alert('Aviso: ' + result.erros.join('\n'))
+    }
+
     await carregar()
     enviarModal.value = null
   } finally {
@@ -203,7 +216,7 @@ const paginasVisiveis = computed(() => {
 </script>
 
 <template>
-  <div class="space-y-5">
+  <div>
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
       <div>
@@ -398,8 +411,9 @@ const paginasVisiveis = computed(() => {
             <tr
               v-for="doc in documentos"
               :key="doc.id"
-              class="border-b transition-colors hover:bg-blue-50"
+              class="border-b transition-colors hover:bg-blue-50 cursor-pointer"
               style="border-color:var(--color-border-light)"
+              @click="verModal = doc"
             >
               <td class="px-4 py-3">
                 <span
@@ -411,7 +425,14 @@ const paginasVisiveis = computed(() => {
                 </span>
               </td>
               <td class="px-4 py-3">
-                <p class="font-medium text-[var(--color-text)]">{{ (doc.pacientes as any)?.nome ?? '—' }}</p>
+                <NuxtLink
+                  :to="`/admin/pacientes/${doc.paciente_id}`"
+                  class="font-medium hover:underline"
+                  style="color:var(--color-blue)"
+                  @click.stop
+                >
+                  {{ (doc.pacientes as any)?.nome ?? '—' }}
+                </NuxtLink>
               </td>
               <td class="px-4 py-3 hidden md:table-cell text-sm" style="color:var(--color-text-muted)">
                 {{ (doc.medicos as any)?.nome ?? '—' }}
@@ -432,12 +453,12 @@ const paginasVisiveis = computed(() => {
                 </span>
               </td>
               <td class="px-4 py-3">
-                <div class="flex items-center gap-1">
+                <div class="flex items-center gap-1" @click.stop>
                   <button
                     v-if="doc.pdf_url"
                     class="p-1.5 rounded-lg transition-colors"
                     style="background:#eff6ff;color:#2563eb"
-                    title="Visualizar"
+                    title="Visualizar PDF"
                     @click="verModal = doc"
                   >
                     <Eye :size="14" />
@@ -510,7 +531,6 @@ const paginasVisiveis = computed(() => {
         </div>
       </template>
     </div>
-  </div>
 
   <!-- Modal Visualizar PDF -->
   <UiModal v-if="verModal" :model-value="true" title="Visualizar Documento" size="xl" @update:model-value="verModal = null">
@@ -556,4 +576,5 @@ const paginasVisiveis = computed(() => {
       </UiButton>
     </template>
   </UiModal>
+  </div>
 </template>

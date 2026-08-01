@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Stethoscope, Mail, Lock, AlertCircle } from 'lucide-vue-next'
+import { Mail, Lock, AlertCircle } from 'lucide-vue-next'
 import { useAuthStore } from '~/stores/auth'
 
 definePageMeta({ layout: false })
@@ -13,7 +13,6 @@ const senha = ref('')
 const erro = ref('')
 const carregando = ref(false)
 
-// Se já logado, redirecionar
 const user = useSupabaseUser()
 onMounted(async () => {
   if (user.value) {
@@ -61,30 +60,14 @@ async function entrar() {
 
 <template>
   <div
-    class="min-h-screen flex items-center justify-center px-4 py-10 relative overflow-hidden"
-    style="background: linear-gradient(135deg, #f8fafc 0%, #eff6ff 50%, #ecfeff 100%)"
+    class="min-h-screen flex items-center justify-center px-4 py-10"
+    style="background: linear-gradient(135deg, #f4f7fb 0%, #e8eef8 50%, #e6f5f1 100%)"
   >
-    <!-- Blobs decorativos de fundo -->
-    <div
-      class="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full opacity-30 pointer-events-none"
-      style="background: radial-gradient(circle, #93c5fd 0%, transparent 70%)"
-    />
-    <div
-      class="absolute -bottom-40 -left-40 w-[500px] h-[500px] rounded-full opacity-30 pointer-events-none"
-      style="background: radial-gradient(circle, #67e8f9 0%, transparent 70%)"
-    />
-
-    <div class="relative w-full max-w-md">
+    <div class="w-full max-w-md">
       <!-- Logo -->
-      <div class="flex flex-col items-center mb-6">
-        <div
-          class="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg mb-3"
-          style="background: linear-gradient(135deg, #2563eb, #06b6d4); box-shadow: 0 10px 30px -8px rgba(37,99,235,0.5)"
-        >
-          <Stethoscope :size="26" class="text-white" />
-        </div>
-        <h1 class="text-2xl font-bold text-slate-900 tracking-tight">SoMedicos</h1>
-        <p class="text-xs text-slate-500 mt-1">Plataforma de teleconsultas SUS</p>
+      <div class="flex flex-col items-center mb-8">
+        <img src="/logo.png" alt="Central SóMedicos" class="w-auto object-contain" style="height:120px" />
+        <p class="text-xs text-slate-500 mt-3">Plataforma de teleconsultas SUS</p>
       </div>
 
       <!-- Card -->
@@ -112,16 +95,13 @@ async function entrar() {
           <div class="space-y-1.5">
             <label class="text-xs font-semibold text-slate-700 uppercase tracking-wide">E-mail</label>
             <div class="relative">
-              <Mail :size="15" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Mail :size="15" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10" />
               <input
                 v-model="email"
                 type="email"
                 placeholder="seu@email.com"
                 :disabled="carregando"
-                class="w-full pl-9 pr-3 py-2.5 rounded-lg text-sm text-slate-900 placeholder-slate-400 outline-none transition-all"
-                style="border: 1.5px solid #e2e8f0; background: white"
-                @focus="($event.target as HTMLElement).style.borderColor='#2563eb'; ($event.target as HTMLElement).style.boxShadow='0 0 0 3px rgba(37,99,235,0.1)'"
-                @blur="($event.target as HTMLElement).style.borderColor='#e2e8f0'; ($event.target as HTMLElement).style.boxShadow='none'"
+                class="input-base"
               >
             </div>
           </div>
@@ -130,16 +110,13 @@ async function entrar() {
           <div class="space-y-1.5">
             <label class="text-xs font-semibold text-slate-700 uppercase tracking-wide">Senha</label>
             <div class="relative">
-              <Lock :size="15" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Lock :size="15" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10" />
               <input
                 v-model="senha"
                 type="password"
                 placeholder="••••••••"
                 :disabled="carregando"
-                class="w-full pl-9 pr-3 py-2.5 rounded-lg text-sm text-slate-900 placeholder-slate-400 outline-none transition-all"
-                style="border: 1.5px solid #e2e8f0; background: white"
-                @focus="($event.target as HTMLElement).style.borderColor='#2563eb'; ($event.target as HTMLElement).style.boxShadow='0 0 0 3px rgba(37,99,235,0.1)'"
-                @blur="($event.target as HTMLElement).style.borderColor='#e2e8f0'; ($event.target as HTMLElement).style.boxShadow='none'"
+                class="input-base"
               >
             </div>
           </div>
@@ -148,10 +125,10 @@ async function entrar() {
           <button
             type="submit"
             :disabled="carregando"
-            class="w-full py-2.5 rounded-lg text-sm font-semibold text-white transition-all mt-2 inline-flex items-center justify-center gap-2"
-            :style="`background: linear-gradient(135deg, #2563eb, #0891b2); box-shadow: 0 6px 20px -6px rgba(37,99,235,0.5); ${carregando ? 'opacity:0.6;cursor:not-allowed' : 'cursor:pointer'}`"
+            class="w-full py-2.5 rounded-lg text-sm font-semibold text-white mt-2 inline-flex items-center justify-center gap-2 login-btn"
+            style="background: linear-gradient(135deg, #1e4d9a, #2daa8a)"
           >
-            <span v-if="!carregando">Entrar</span>
+            <template v-if="!carregando">Entrar</template>
             <template v-else>
               <svg class="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -163,7 +140,6 @@ async function entrar() {
         </form>
       </div>
 
-      <!-- Rodapé -->
       <p class="text-center text-xs text-slate-500 mt-6">
         Acesso restrito a profissionais cadastrados ·
         <span class="text-slate-400">Suporte via administração</span>
@@ -171,3 +147,36 @@ async function entrar() {
     </div>
   </div>
 </template>
+
+<style scoped>
+.input-base {
+  width: 100%;
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
+  padding-left: 2.25rem;
+  padding-right: 0.875rem;
+  font-size: 0.875rem;
+  border-radius: 0.5rem;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #0f172a;
+  outline: none;
+  transition: border-color 200ms, box-shadow 200ms;
+}
+.input-base::placeholder { color: #94a3b8; }
+.input-base:focus {
+  border-color: #2daa8a;
+  box-shadow: 0 0 0 3px rgba(45,170,138,0.12);
+  background: white;
+}
+.input-base:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.login-btn {
+  box-shadow: 0 4px 20px rgba(45,170,138,0.3);
+  transition: box-shadow 200ms ease;
+}
+.login-btn:not(:disabled):hover {
+  box-shadow: 0 8px 28px rgba(45,170,138,0.4);
+}
+.login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+</style>

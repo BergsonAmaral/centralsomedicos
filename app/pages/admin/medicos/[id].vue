@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowLeft, Camera, Eye, EyeOff } from 'lucide-vue-next'
+import { ArrowLeft, Camera, Eye, EyeOff, AlertTriangle, Trash2 } from 'lucide-vue-next'
 import { useForm } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 import { z } from 'zod'
@@ -34,6 +34,16 @@ const [email, emailAttrs] = defineField('email')
 const [senha, senhaAttrs] = defineField('senha')
 const [telefone, telefoneAttrs] = defineField('telefone')
 const [valorConsulta, valorConsultaAttrs] = defineField('valor_consulta')
+
+// Sala do médico
+const salaSlug = ref('')
+const salaSlugManual = ref(false)
+
+watch(nome, (val) => {
+  if (!salaSlugManual.value) {
+    salaSlug.value = slugify(val)
+  }
+})
 
 const senhaVisivel = ref(false)
 
@@ -70,6 +80,8 @@ onMounted(async () => {
         })
         emailOriginal.value = data.email ?? ''
         fotoPreview.value = data.foto_url
+        salaSlug.value = data.sala_slug ?? ''
+        if (data.sala_slug) salaSlugManual.value = true
       }
     } catch (e: any) {
       erro.value = e?.data?.message ?? 'Erro ao carregar médico'
@@ -111,6 +123,7 @@ const onSubmit = handleSubmit(async (values) => {
           senha: values.senha,
           foto_url: fotoUrl,
           valor_consulta: values.valor_consulta ?? 0,
+          sala_slug: salaSlug.value || null,
         },
       }).catch((e) => {
         throw new Error(e?.data?.message ?? 'Erro ao criar médico')
@@ -128,6 +141,7 @@ const onSubmit = handleSubmit(async (values) => {
         especialidade: values.especialidade,
         foto_url: fotoUrl,
         valor_consulta: values.valor_consulta ?? null,
+        sala_slug: salaSlug.value || null,
       }).eq('id', id)
 
       // Atualiza credenciais (email/senha) se mudaram
@@ -159,6 +173,20 @@ const onSubmit = handleSubmit(async (values) => {
     salvando.value = false
   }
 })
+
+async function desativarMedico() {
+  if (!confirm('Desativar este médico? Ele não poderá mais fazer login nem aparecer na fila.')) return
+  await supabase.from('medicos').update({ ativo: false }).eq('id', id)
+  navigateTo('/admin/medicos')
+}
+
+async function excluirMedico() {
+  if (!confirm('ATENÇÃO: Excluir o médico permanentemente? Todos os agendamentos e documentos associados serão removidos. Esta ação não pode ser desfeita.')) return
+  await supabase.from('documentos').delete().eq('medico_id', id)
+  await supabase.from('agendamentos').delete().eq('medico_id', id)
+  await supabase.from('medicos').delete().eq('id', id)
+  navigateTo('/admin/medicos')
+}
 </script>
 
 <template>
@@ -224,6 +252,39 @@ const onSubmit = handleSubmit(async (values) => {
         </div>
       </UiCard>
 
+      <!-- Sala de teleconsulta -->
+      <UiCard>
+        <template #header>
+          <h3 class="font-semibold">Sala de Teleconsulta</h3>
+        </template>
+        <div class="space-y-3">
+          <p class="text-sm text-[var(--color-text-muted)]">
+            Cada médico tem sua própria sala virtual. Os pacientes aguardam nessa URL antes da consulta.
+          </p>
+          <div>
+            <label class="block text-sm font-semibold text-[var(--color-text)] mb-1.5">
+              Link da sala
+            </label>
+            <div class="flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm" style="border-color:var(--color-border);background:var(--color-surface-2)">
+              <span class="shrink-0" style="color:var(--color-text-dim)">/sala/</span>
+              <input
+                v-model="salaSlug"
+                class="flex-1 bg-transparent outline-none text-[var(--color-text)]"
+                placeholder="dr-nome-sobrenome"
+                @input="salaSlugManual = true"
+              />
+            </div>
+            <p class="mt-1.5 text-xs" style="color:var(--color-text-muted)">
+              URL completa:
+              <strong>{{ typeof window !== 'undefined' ? window.location.origin : '' }}/sala/{{ salaSlug || '...' }}</strong>
+            </p>
+            <p v-if="!salaSlug" class="mt-1 text-xs text-amber-600">
+              ⚠️ Preencha o nome do médico para gerar o slug automaticamente.
+            </p>
+          </div>
+        </div>
+      </UiCard>
+
       <!-- Financeiro -->
       <UiCard>
         <template #header>
@@ -261,6 +322,37 @@ const onSubmit = handleSubmit(async (values) => {
         <UiButton variant="primary" type="submit" :loading="salvando">
           {{ isNovo ? 'Cadastrar Médico' : 'Salvar Alterações' }}
         </UiButton>
+      </div>
+
+      <!-- Zona de Perigo (apenas edição) -->
+      <div v-if="!isNovo" class="rounded-2xl border-2 border-red-200 bg-red-50 p-5 space-y-4">
+        <div class="flex items-center gap-2">
+          <AlertTriangle :size="18" style="color:#dc2626" />
+          <h3 class="font-bold text-red-700">Zona de Perigo</h3>
+        </div>
+        <p class="text-sm text-red-600">
+          Desativar o médico impede login e oculta da fila. Excluir remove permanentemente todos os dados associados.
+        </p>
+        <div class="flex flex-wrap gap-3">
+          <UiButton
+            variant="ghost"
+            size="sm"
+            class="border border-orange-300 text-orange-700 hover:bg-orange-50"
+            type="button"
+            @click="desativarMedico"
+          >
+            Desativar médico
+          </UiButton>
+          <UiButton
+            variant="ghost"
+            size="sm"
+            class="border border-red-300 text-red-600 hover:bg-red-100"
+            type="button"
+            @click="excluirMedico"
+          >
+            <Trash2 :size="14" /> Excluir médico permanentemente
+          </UiButton>
+        </div>
       </div>
     </form>
   </div>

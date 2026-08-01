@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Search, Phone, MessageCircle, ChevronLeft, ChevronRight, Users2, Filter } from 'lucide-vue-next'
+import { Search, Phone, MessageCircle, ChevronLeft, ChevronRight, Users2, Filter, UserPlus, CalendarPlus } from 'lucide-vue-next'
 import type { Paciente } from '~/types'
 
 definePageMeta({ layout: 'admin', middleware: ['auth', 'role'] })
@@ -20,35 +20,39 @@ const carregando = ref(true)
 
 async function carregar() {
   carregando.value = true
-  const from = (pagina.value - 1) * POR_PAGINA
-  const to = from + POR_PAGINA - 1
+  try {
+    const from = (pagina.value - 1) * POR_PAGINA
+    const to = from + POR_PAGINA - 1
 
-  let q = supabase.from('pacientes').select('*', { count: 'exact' })
+    let q = supabase.from('pacientes').select('*', { count: 'exact' })
 
-  if (busca.value.trim()) {
-    const termo = busca.value.trim()
-    const somenteDigitos = termo.replace(/\D/g, '')
-    if (somenteDigitos.length >= 6) {
-      q = q.or(`cpf.ilike.%${somenteDigitos}%,sus_cartao.ilike.%${termo}%`)
-    } else {
-      q = q.ilike('nome', `%${termo}%`)
+    if (busca.value.trim()) {
+      const termo = busca.value.trim()
+      const somenteDigitos = termo.replace(/\D/g, '')
+      if (somenteDigitos.length >= 6) {
+        q = q.or(`cpf.ilike.%${somenteDigitos}%,sus_cartao.ilike.%${termo}%`)
+      } else {
+        q = q.ilike('nome', `%${termo}%`)
+      }
     }
+
+    if (filtroSexo.value) q = q.eq('sexo', filtroSexo.value)
+    if (filtroTelefone.value) q = q.not('telefone', 'is', null)
+    if (filtroSus.value) q = q.not('sus_cartao', 'is', null)
+
+    if (ordenar.value === 'nome_asc') q = q.order('nome', { ascending: true })
+    else if (ordenar.value === 'nome_desc') q = q.order('nome', { ascending: false })
+    else q = q.order('created_at', { ascending: false })
+
+    q = q.range(from, to)
+
+    const { data, count, error } = await q
+    if (error) console.error('Erro ao carregar pacientes:', error.message)
+    pacientes.value = data ?? []
+    total.value = count ?? 0
+  } finally {
+    carregando.value = false
   }
-
-  if (filtroSexo.value) q = q.eq('sexo', filtroSexo.value)
-  if (filtroTelefone.value) q = q.not('telefone', 'is', null)
-  if (filtroSus.value) q = q.not('sus_cartao', 'is', null)
-
-  if (ordenar.value === 'nome_asc') q = q.order('nome', { ascending: true })
-  else if (ordenar.value === 'nome_desc') q = q.order('nome', { ascending: false })
-  else q = q.order('created_at', { ascending: false })
-
-  q = q.range(from, to)
-
-  const { data, count } = await q
-  pacientes.value = data ?? []
-  total.value = count ?? 0
-  carregando.value = false
 }
 
 const totalPaginas = computed(() => Math.max(1, Math.ceil(total.value / POR_PAGINA)))
@@ -96,6 +100,47 @@ function limparFiltros() {
   busca.value = ''
 }
 
+const modalCadastro = ref(false)
+
+// Agendamento rápido
+const medicos = ref<{ id: string; nome: string }[]>([])
+const agendandoPaciente = ref<Paciente | null>(null)
+const agForm = ref({ medico_id: '', data_consulta: '', motivo: '' })
+const salvandoAg = ref(false)
+const erroAg = ref('')
+
+async function abrirAgendar(p: Paciente) {
+  if (!medicos.value.length) {
+    const { data } = await supabase.from('medicos').select('id, nome').eq('ativo', true).order('nome')
+    medicos.value = data ?? []
+  }
+  const hoje = new Date()
+  agForm.value = {
+    medico_id: medicos.value[0]?.id ?? '',
+    data_consulta: `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}-${String(hoje.getDate()).padStart(2,'0')}`,
+    motivo: '',
+  }
+  erroAg.value = ''
+  agendandoPaciente.value = p
+}
+
+async function confirmarAgendamento() {
+  if (!agendandoPaciente.value || !agForm.value.medico_id || !agForm.value.data_consulta) return
+  salvandoAg.value = true
+  erroAg.value = ''
+  const { error } = await supabase.from('agendamentos').insert({
+    paciente_id: agendandoPaciente.value.id,
+    medico_id: agForm.value.medico_id,
+    data_consulta: agForm.value.data_consulta,
+    motivo: agForm.value.motivo || null,
+    origem: 'manual',
+    status: 'agendado',
+  })
+  salvandoAg.value = false
+  if (error) { erroAg.value = error.message; return }
+  agendandoPaciente.value = null
+}
+
 const paginasVisiveis = computed(() => {
   const total = totalPaginas.value
   const atual = pagina.value
@@ -119,6 +164,9 @@ const paginasVisiveis = computed(() => {
           {{ carregando ? '…' : `${total} paciente${total !== 1 ? 's' : ''} encontrado${total !== 1 ? 's' : ''}` }}
         </p>
       </div>
+      <UiButton variant="primary" @click="modalCadastro = true">
+        <UserPlus :size="16" /> Novo Paciente
+      </UiButton>
     </div>
 
     <!-- Barra de busca + filtros -->
@@ -228,6 +276,7 @@ const paginasVisiveis = computed(() => {
               <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide hidden md:table-cell" style="color:var(--color-text-muted)">SUS</th>
               <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide hidden lg:table-cell" style="color:var(--color-text-muted)">Nascimento</th>
               <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide" style="color:var(--color-text-muted)">Contato</th>
+              <th class="px-4 py-3" />
             </tr>
           </thead>
           <tbody>
@@ -262,7 +311,7 @@ const paginasVisiveis = computed(() => {
                 {{ p.data_nascimento ? new Date(p.data_nascimento).toLocaleDateString('pt-BR') : '—' }}
               </td>
               <td class="px-4 py-3" @click.stop>
-                <div class="flex items-center gap-1.5">
+                <div class="flex items-center gap-1">
                   <a
                     v-if="p.telefone"
                     :href="`tel:${p.telefone}`"
@@ -285,6 +334,16 @@ const paginasVisiveis = computed(() => {
                   </a>
                   <span v-if="!p.telefone" class="text-xs" style="color:var(--color-text-dim)">—</span>
                 </div>
+              </td>
+              <td class="px-4 py-3" @click.stop>
+                <button
+                  title="Agendar consulta"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap"
+                  style="background:#ecfdf5;color:#059669;border:1px solid #a7f3d0"
+                  @click.stop="abrirAgendar(p)"
+                >
+                  <CalendarPlus :size="13" /> Agendar
+                </button>
               </td>
             </tr>
           </tbody>
@@ -334,6 +393,40 @@ const paginasVisiveis = computed(() => {
         </div>
       </template>
     </div>
+
+    <!-- Modal cadastro -->
+    <AdminCadastroPacienteModal
+      v-if="modalCadastro"
+      @close="modalCadastro = false"
+      @criado="(p) => { modalCadastro = false; carregar(); navigateTo(`/admin/pacientes/${p.id}`) }"
+    />
+
+    <!-- Modal agendamento rápido -->
+    <UiModal v-if="agendandoPaciente" :model-value="true" title="Agendar Consulta" size="sm" @update:model-value="agendandoPaciente = null">
+      <div class="space-y-4">
+        <div class="p-3 rounded-xl" style="background:var(--color-surface-2)">
+          <p class="font-semibold text-sm text-[var(--color-text)]">{{ agendandoPaciente.nome }}</p>
+          <p class="text-xs text-[var(--color-text-muted)] mt-0.5">{{ agendandoPaciente.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') }}</p>
+        </div>
+        <div>
+          <label class="text-sm font-medium text-[var(--color-text-muted)] block mb-1">Médico *</label>
+          <select v-model="agForm.medico_id" class="input-base">
+            <option value="">Selecione</option>
+            <option v-for="m in medicos" :key="m.id" :value="m.id">{{ m.nome }}</option>
+          </select>
+        </div>
+        <UiInput v-model="agForm.data_consulta" label="Data *" type="date" />
+        <div>
+          <label class="text-sm font-medium text-[var(--color-text-muted)] block mb-1">Motivo</label>
+          <input v-model="agForm.motivo" type="text" class="input-base" placeholder="Opcional" />
+        </div>
+        <p v-if="erroAg" class="text-xs text-red-600">{{ erroAg }}</p>
+      </div>
+      <template #footer>
+        <UiButton variant="ghost" @click="agendandoPaciente = null">Cancelar</UiButton>
+        <UiButton variant="primary" :loading="salvandoAg" :disabled="!agForm.medico_id || !agForm.data_consulta" @click="confirmarAgendamento">Agendar</UiButton>
+      </template>
+    </UiModal>
   </div>
 </template>
 

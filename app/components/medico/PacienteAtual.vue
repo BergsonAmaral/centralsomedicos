@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Phone, Mail, IdCard, Calendar, AlertTriangle, History, ChevronDown } from 'lucide-vue-next'
+import { Phone, Mail, IdCard, Calendar, AlertTriangle, History, ChevronDown, Activity } from 'lucide-vue-next'
 import type { Agendamento, Consulta } from '~/types'
 
 const props = defineProps<{ agendamento: Agendamento }>()
@@ -39,6 +39,52 @@ async function toggleHistorico() {
   }
 }
 
+const sinaisVitais = computed(() => {
+  const t = triagem.value
+  const itens: { label: string; valor: string; alerta?: boolean }[] = []
+  if (t.pressao_sistolica && t.pressao_diastolica)
+    itens.push({
+      label: 'PA',
+      valor: `${t.pressao_sistolica}/${t.pressao_diastolica} mmHg`,
+      alerta: t.pressao_sistolica >= 140 || t.pressao_diastolica >= 90,
+    })
+  if (t.pulso)
+    itens.push({
+      label: 'Pulso',
+      valor: `${t.pulso} bpm`,
+      alerta: t.pulso < 50 || t.pulso > 100,
+    })
+  if (t.temperatura)
+    itens.push({
+      label: 'Temp.',
+      valor: `${t.temperatura.toFixed(1)} °C`,
+      alerta: t.temperatura >= 37.8,
+    })
+  if (t.saturacao)
+    itens.push({
+      label: 'SpO₂',
+      valor: `${t.saturacao}%`,
+      alerta: t.saturacao < 95,
+    })
+  if (t.glicemia)
+    itens.push({
+      label: 'Glicemia',
+      valor: `${t.glicemia} mg/dL`,
+      alerta: t.glicemia < 70 || t.glicemia > 126,
+    })
+  if (t.peso)   itens.push({ label: 'Peso',    valor: `${t.peso} kg` })
+  if (t.altura) itens.push({ label: 'Altura',  valor: `${t.altura} cm` })
+  if (t.imc)
+    itens.push({
+      label: 'IMC',
+      valor: `${t.imc} kg/m²`,
+      alerta: t.imc < 18.5 || t.imc >= 30,
+    })
+  if (t.gordura_percentual)
+    itens.push({ label: '% Gordura', valor: `${t.gordura_percentual}%` })
+  return itens
+})
+
 const alertas = computed(() => {
   const arr: { label: string; bg: string; cor: string }[] = []
   if (triagem.value.urgencia) arr.push({ label: 'Urgência', bg: '#fef2f2', cor: '#b91c1c' })
@@ -58,6 +104,27 @@ const alertas = computed(() => {
         <p class="text-xs text-[var(--color-text-muted)] mt-0.5">
           {{ calcularIdade(paciente?.data_nascimento) ?? '—' }} anos
         </p>
+      </div>
+    </div>
+
+    <!-- Sinais Vitais -->
+    <div v-if="sinaisVitais.length" class="rounded-xl border p-3" style="border-color:#e2e8f0;background:#f8fafc">
+      <p class="text-[10px] uppercase tracking-wider font-semibold mb-2 flex items-center gap-1.5" style="color:#64748b">
+        <Activity :size="11" />
+        Sinais Vitais
+      </p>
+      <div class="grid grid-cols-2 gap-x-4 gap-y-1.5">
+        <div
+          v-for="sv in sinaisVitais"
+          :key="sv.label"
+          class="flex items-baseline justify-between text-xs"
+        >
+          <span class="font-medium" style="color:#94a3b8">{{ sv.label }}</span>
+          <span
+            class="font-semibold"
+            :style="sv.alerta ? 'color:#dc2626' : 'color:#0f172a'"
+          >{{ sv.valor }}</span>
+        </div>
       </div>
     </div>
 

@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
   const serviceKey = config.supabaseServiceKey
-  const supabaseUrl = process.env.SUPABASE_URL!
+  const supabaseUrl = process.env.NUXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? ''
 
   if (!serviceKey) {
     throw createError({ statusCode: 500, message: 'Service key não configurada' })

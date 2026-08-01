@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { UserCheck, X } from 'lucide-vue-next'
+import { UserCheck, X, Heart, Thermometer, Activity, Weight, Bluetooth, BluetoothConnected, BluetoothOff, Loader2, Droplets, Scale } from 'lucide-vue-next'
 import type { Agendamento } from '~/types'
 import { useFila } from '~/composables/useFila'
+import { useDispositivosBT, type TipoDispositivo } from '~/composables/useDispositivosBT'
 
 interface Props {
   agendamento: Agendamento
@@ -10,14 +11,70 @@ interface Props {
 const props = defineProps<Props>()
 const emit = defineEmits<{ close: [] }>()
 
+const supabase = useSupabaseClient()
 const fila = useFila()
 const carregando = ref(false)
+
+const bt = useDispositivosBT()
+const maletaAberta = ref(false)
+
+// Sincroniza sinais capturados → campos da triagem em tempo real
+watch(bt.sinais, (s) => {
+  if (s.pressao_sistolica != null)  triagem.value.pressao_sistolica  = s.pressao_sistolica
+  if (s.pressao_diastolica != null) triagem.value.pressao_diastolica = s.pressao_diastolica
+  if (s.pulso != null)              triagem.value.pulso              = s.pulso
+  if (s.temperatura != null)        triagem.value.temperatura        = s.temperatura
+  if (s.saturacao != null)          triagem.value.saturacao          = s.saturacao
+  if (s.peso != null)               triagem.value.peso               = s.peso
+  if (s.glicemia != null)           triagem.value.glicemia           = s.glicemia
+  if (s.gordura_percentual != null) triagem.value.gordura_percentual = s.gordura_percentual
+  if (s.imc != null)                triagem.value.imc                = s.imc
+}, { deep: true })
+
+const dispositivosConfig: { tipo: TipoDispositivo; label: string; icone: any; cor: string }[] = [
+  { tipo: 'pressao',       label: 'Pressão + Pulso', icone: Activity,    cor: '#3b82f6' },
+  { tipo: 'oximetro',      label: 'SpO₂ + Pulso',    icone: Heart,       cor: '#ef4444' },
+  { tipo: 'termometro',    label: 'Temperatura',      icone: Thermometer, cor: '#f59e0b' },
+  { tipo: 'balanca',       label: 'Balança / Peso',   icone: Weight,      cor: '#10b981' },
+  { tipo: 'glicosimetro',  label: 'Glicemia (HGT)',   icone: Droplets,    cor: '#8b5cf6' },
+  { tipo: 'bioimpedancia', label: 'Bioimpedância',    icone: Scale,       cor: '#0891b2' },
+]
 
 const triagem = ref({
   alergia: false,
   febre: false,
   urgencia: false,
   obs: '',
+  pressao_sistolica: null as number | null,
+  pressao_diastolica: null as number | null,
+  pulso: null as number | null,
+  temperatura: null as number | null,
+  saturacao: null as number | null,
+  peso: null as number | null,
+  altura: null as number | null,
+  glicemia: null as number | null,
+  gordura_percentual: null as number | null,
+  imc: null as number | null,
+})
+
+interface MedicoOpcao { id: string; nome: string; especialidade: string; pausado: boolean }
+interface SalaOpcao { id: string; slug: string; nome: string }
+
+const medicos = ref<MedicoOpcao[]>([])
+const salas = ref<SalaOpcao[]>([])
+const medicoSelecionadoId = ref<string | null>(props.agendamento.medico_id ?? null)
+const salaSelecionadaSlug = ref<string | null>(props.agendamento.sala_slug ?? null)
+
+onMounted(async () => {
+  const [{ data: mData }, { data: sData }] = await Promise.all([
+    supabase.from('medicos').select('id, nome, especialidade, pausado').eq('ativo', true).order('nome'),
+    supabase.from('salas').select('id, slug, nome').eq('ativo', true).order('nome'),
+  ])
+  medicos.value = mData ?? []
+  salas.value = sData ?? []
+  if (salas.value.length === 1 && !salaSelecionadaSlug.value) {
+    salaSelecionadaSlug.value = salas.value[0].slug
+  }
 })
 
 const paciente = computed(() => props.agendamento.pacientes)
@@ -29,8 +86,20 @@ const cpfFormatado = computed(() => {
 async function confirmar() {
   carregando.value = true
   try {
-    const { error } = await fila.fazerCheckin(props.agendamento.id, triagem.value)
-    if (error) throw new Error(error.message)
+    // Faz check-in com triagem
+    const { error: errCheckin } = await fila.fazerCheckin(props.agendamento.id, triagem.value)
+    if (errCheckin) throw new Error(errCheckin.message)
+
+    // Se médico e sala selecionados, já chama direto (entra na fila ativa como aguardando_medico)
+    if (medicoSelecionadoId.value && salaSelecionadaSlug.value) {
+      const { error: errChamar } = await fila.chamar(
+        props.agendamento.id,
+        medicoSelecionadoId.value,
+        salaSelecionadaSlug.value,
+      )
+      if (errChamar) throw new Error(errChamar.message)
+    }
+
     await fila.carregar()
     emit('close')
   } catch (e: any) {
@@ -55,6 +124,29 @@ async function confirmar() {
           Motivo: {{ agendamento.motivo }}
         </p>
       </div>
+
+      <!-- Médico e Sala -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs font-semibold text-[var(--color-text-muted)] block mb-1">Médico</label>
+          <select v-model="medicoSelecionadoId" class="input-base py-2.5 text-sm">
+            <option :value="null">Selecione…</option>
+            <option v-for="m in medicos" :key="m.id" :value="m.id">
+              {{ m.nome }} — {{ m.especialidade }}{{ m.pausado ? ' (pausado)' : '' }}
+            </option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-[var(--color-text-muted)] block mb-1">Sala</label>
+          <select v-model="salaSelecionadaSlug" class="input-base py-2.5 text-sm">
+            <option :value="null">Selecione…</option>
+            <option v-for="s in salas" :key="s.id" :value="s.slug">{{ s.nome }}</option>
+          </select>
+        </div>
+      </div>
+      <p v-if="!medicoSelecionadoId || !salaSelecionadaSlug" class="text-xs text-[var(--color-text-muted)] -mt-1">
+        Se não selecionar médico e sala, o paciente ficará em check-in aguardando ser chamado manualmente.
+      </p>
 
       <!-- Triagem -->
       <div>
@@ -93,6 +185,213 @@ async function confirmar() {
               </label>
             </div>
           </label>
+        </div>
+
+        <!-- Maleta de Telemetria (Bluetooth) -->
+        <div v-if="bt.suportado" class="mt-4">
+          <button
+            type="button"
+            class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-sm font-semibold transition-colors"
+            :style="maletaAberta
+              ? 'background:#eff6ff;border-color:#93c5fd;color:#1d4ed8'
+              : 'background:#f8fafc;border-color:#e2e8f0;color:#475569'"
+            @click="maletaAberta = !maletaAberta"
+          >
+            <span class="flex items-center gap-2">
+              <Bluetooth :size="15" />
+              Maleta de Telemetria
+            </span>
+            <span class="text-[11px] font-normal opacity-70">conectar aparelhos →</span>
+          </button>
+
+          <div v-if="maletaAberta" class="mt-2 space-y-3">
+            <!-- Omron HEM-7156T (protocolo proprietário) -->
+            <AdminOmronConectar @medido="(v) => { triagem.pressao_sistolica = v.sistolica; triagem.pressao_diastolica = v.diastolica; triagem.pulso = v.pulso }" />
+
+            <!-- Demais aparelhos (protocolo GATT padrão) -->
+            <div class="grid grid-cols-2 gap-2">
+            <button
+              v-for="d in dispositivosConfig"
+              :key="d.tipo"
+              type="button"
+              class="flex flex-col items-center gap-1.5 p-3 rounded-xl border text-xs font-medium transition-all"
+              :style="bt.estado[d.tipo].conectado
+                ? `background:#f0fdf4;border-color:#86efac;color:${d.cor}`
+                : bt.estado[d.tipo].erro
+                  ? 'background:#fef2f2;border-color:#fca5a5;color:#dc2626'
+                  : 'background:#f8fafc;border-color:#e2e8f0;color:#64748b'"
+              :disabled="bt.estado[d.tipo].lendo"
+              @click="bt.conectar[d.tipo]()"
+            >
+              <component
+                :is="bt.estado[d.tipo].lendo ? Loader2 : bt.estado[d.tipo].conectado ? BluetoothConnected : bt.estado[d.tipo].erro ? BluetoothOff : d.icone"
+                :size="20"
+                :class="bt.estado[d.tipo].lendo ? 'animate-spin' : ''"
+                :style="`color:${d.cor}`"
+              />
+              <span>{{ d.label }}</span>
+              <span class="text-[10px] opacity-60">
+                {{ bt.estado[d.tipo].lendo ? 'aguardando…' : bt.estado[d.tipo].conectado ? 'conectado ✓' : bt.estado[d.tipo].erro ? 'falhou' : 'toque para parear' }}
+              </span>
+            </button>
+          </div>
+
+          <!-- Preview dos valores capturados em tempo real -->
+          <div
+            v-if="maletaAberta && (bt.sinais.pressao_sistolica || bt.sinais.pulso || bt.sinais.saturacao || bt.sinais.temperatura || bt.sinais.peso || bt.sinais.glicemia || bt.sinais.gordura_percentual)"
+            class="mt-2 flex flex-wrap gap-2 px-3 py-2 rounded-lg text-xs"
+            style="background:#f0fdf4;border:1px solid #bbf7d0"
+          >
+            <span v-if="bt.sinais.pressao_sistolica" class="font-semibold text-green-700">
+              PA {{ bt.sinais.pressao_sistolica }}/{{ bt.sinais.pressao_diastolica }} mmHg
+            </span>
+            <span v-if="bt.sinais.pulso" class="font-semibold text-green-700">
+              Pulso {{ bt.sinais.pulso }} bpm
+            </span>
+            <span v-if="bt.sinais.saturacao" class="font-semibold text-green-700">
+              SpO₂ {{ bt.sinais.saturacao }}%
+            </span>
+            <span v-if="bt.sinais.temperatura" class="font-semibold text-green-700">
+              {{ bt.sinais.temperatura }} °C
+            </span>
+            <span v-if="bt.sinais.peso" class="font-semibold text-green-700">
+              {{ bt.sinais.peso }} kg
+            </span>
+            <span v-if="bt.sinais.glicemia" class="font-semibold text-green-700">
+              Glicemia {{ bt.sinais.glicemia }} mg/dL
+            </span>
+            <span v-if="bt.sinais.gordura_percentual" class="font-semibold text-green-700">
+              Gordura {{ bt.sinais.gordura_percentual }}%
+            </span>
+            <span v-if="bt.sinais.imc" class="font-semibold text-green-700">
+              IMC {{ bt.sinais.imc }}
+            </span>
+            <span class="text-green-600 opacity-70 ml-auto">preenchendo campos automaticamente…</span>
+          </div>
+          </div> <!-- /space-y-3 maleta -->
+        </div>
+
+        <!-- Sinais Vitais -->
+        <div class="mt-4">
+          <p class="text-sm font-semibold text-[var(--color-text)] mb-3 flex items-center gap-2">
+            <Activity :size="15" class="text-[var(--color-blue)]" />
+            Sinais Vitais
+          </p>
+          <div class="grid grid-cols-2 gap-3">
+            <!-- Pressão Arterial -->
+            <div class="col-span-2">
+              <label class="text-xs font-medium text-[var(--color-text-muted)] block mb-1">Pressão Arterial (mmHg)</label>
+              <div class="flex items-center gap-2">
+                <input
+                  v-model.number="triagem.pressao_sistolica"
+                  type="number"
+                  min="40" max="300"
+                  placeholder="Sistólica"
+                  class="input-base text-sm"
+                />
+                <span class="text-[var(--color-text-muted)] font-bold">/</span>
+                <input
+                  v-model.number="triagem.pressao_diastolica"
+                  type="number"
+                  min="20" max="200"
+                  placeholder="Diastólica"
+                  class="input-base text-sm"
+                />
+              </div>
+            </div>
+            <!-- Pulso -->
+            <div>
+              <label class="text-xs font-medium text-[var(--color-text-muted)] block mb-1">Pulso (bpm)</label>
+              <input
+                v-model.number="triagem.pulso"
+                type="number"
+                min="20" max="300"
+                placeholder="ex: 72"
+                class="input-base text-sm"
+              />
+            </div>
+            <!-- Temperatura -->
+            <div>
+              <label class="text-xs font-medium text-[var(--color-text-muted)] block mb-1">Temperatura (°C)</label>
+              <input
+                v-model.number="triagem.temperatura"
+                type="number"
+                min="30" max="45"
+                step="0.1"
+                placeholder="ex: 36.5"
+                class="input-base text-sm"
+              />
+            </div>
+            <!-- Saturação -->
+            <div>
+              <label class="text-xs font-medium text-[var(--color-text-muted)] block mb-1">Saturação SpO₂ (%)</label>
+              <input
+                v-model.number="triagem.saturacao"
+                type="number"
+                min="50" max="100"
+                placeholder="ex: 98"
+                class="input-base text-sm"
+              />
+            </div>
+            <!-- Peso -->
+            <div>
+              <label class="text-xs font-medium text-[var(--color-text-muted)] block mb-1">Peso (kg)</label>
+              <input
+                v-model.number="triagem.peso"
+                type="number"
+                min="1" max="500"
+                step="0.1"
+                placeholder="ex: 70.5"
+                class="input-base text-sm"
+              />
+            </div>
+            <!-- Altura -->
+            <div>
+              <label class="text-xs font-medium text-[var(--color-text-muted)] block mb-1">Altura (cm)</label>
+              <input
+                v-model.number="triagem.altura"
+                type="number"
+                min="30" max="250"
+                placeholder="ex: 170"
+                class="input-base text-sm"
+              />
+            </div>
+            <!-- Glicemia -->
+            <div>
+              <label class="text-xs font-medium text-[var(--color-text-muted)] block mb-1">Glicemia (mg/dL)</label>
+              <input
+                v-model.number="triagem.glicemia"
+                type="number"
+                min="20" max="600"
+                placeholder="ex: 95"
+                class="input-base text-sm"
+              />
+            </div>
+            <!-- % Gordura -->
+            <div>
+              <label class="text-xs font-medium text-[var(--color-text-muted)] block mb-1">% Gordura corporal</label>
+              <input
+                v-model.number="triagem.gordura_percentual"
+                type="number"
+                min="1" max="70"
+                step="0.1"
+                placeholder="ex: 22.5"
+                class="input-base text-sm"
+              />
+            </div>
+            <!-- IMC -->
+            <div>
+              <label class="text-xs font-medium text-[var(--color-text-muted)] block mb-1">IMC (kg/m²)</label>
+              <input
+                v-model.number="triagem.imc"
+                type="number"
+                min="10" max="70"
+                step="0.1"
+                placeholder="ex: 24.2"
+                class="input-base text-sm"
+              />
+            </div>
+          </div>
         </div>
 
         <div class="mt-3">

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UserX, UserCheck, PhoneCall, Eye, Clock } from 'lucide-vue-next'
+import { UserX, UserCheck, PhoneCall, Eye, Clock, Zap } from 'lucide-vue-next'
 import type { Agendamento } from '~/types'
 import { useFila } from '~/composables/useFila'
 
@@ -37,6 +37,21 @@ function horaFormatada(iso: string | null): string {
 }
 
 const marcandoFaltou = ref<string | null>(null)
+const entradaDireta = ref<string | null>(null)
+
+async function fazerEntradaDireta(ag: Agendamento) {
+  entradaDireta.value = ag.id
+  try {
+    const { error } = await fila.fazerCheckin(ag.id, {})
+    if (error) throw new Error((error as any).message)
+    await fila.carregar()
+  } catch (e: any) {
+    alert('Erro: ' + (e?.message ?? 'tente novamente'))
+  } finally {
+    entradaDireta.value = null
+  }
+}
+
 async function confirmarFaltou(id: string) {
   marcandoFaltou.value = id
   try {
@@ -82,6 +97,9 @@ onUnmounted(() => clearInterval(interval))
           <p v-if="ag.motivo" class="text-xs text-[var(--color-text-dim)] mt-1 truncate">{{ ag.motivo }}</p>
         </div>
         <div class="flex gap-2">
+          <UiButton variant="ghost" size="sm" title="Entrada rápida (sem triagem)" :loading="entradaDireta === ag.id" @click="fazerEntradaDireta(ag)">
+            <Zap :size="14" style="color:#f59e0b" />
+          </UiButton>
           <UiButton variant="primary" size="sm" class="flex-1" @click="checkinModal = ag">
             <UserCheck :size="14" /> Check-in
           </UiButton>
@@ -140,7 +158,7 @@ onUnmounted(() => clearInterval(interval))
           class="w-full"
           @click="chamarModal = ag"
         >
-          <PhoneCall :size="14" /> Chamar →
+          <PhoneCall :size="14" /> Encaminhar →
         </UiButton>
       </div>
     </div>

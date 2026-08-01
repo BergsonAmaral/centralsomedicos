@@ -122,43 +122,55 @@ async function encerrarConsulta() {
     const duracaoMin = Math.round(timerSeg.value / 60)
     const pacienteId = (emConsulta.value.pacientes as any)?.id
     const pacienteNome = (emConsulta.value.pacientes as any)?.nome
+    const medicoIdAtual = emConsulta.value.medico_id
+    const salaSlugAtual = emConsulta.value.sala_slug ?? null
 
-    const { data: consulta, error: errConsulta } = await supabase
+    // 1. Atualiza o status primeiro — isso é o mais importante
+    const { error: errEncerrar } = await fila.encerrar(agendamentoId)
+    if (errEncerrar) throw new Error((errEncerrar as any).message)
+
+    const evolucaoCapturada = evolucao.value || null
+    pararTimer()
+    encerrandoModal.value = false
+    evolucao.value = ''
+
+    // 2. Salva a consulta em background (não bloqueia o fluxo)
+    supabase
       .from('consultas')
       .insert({
         agendamento_id: agendamentoId,
         paciente_id: pacienteId,
-        medico_id: emConsulta.value.medico_id,
-        evolucao: evolucao.value || null,
+        medico_id: medicoIdAtual,
+        evolucao: evolucaoCapturada,
         duracao_minutos: duracaoMin,
       })
       .select('id')
       .single()
-
-    if (errConsulta) throw new Error(errConsulta.message)
-
-    // Vincula documentos já emitidos durante o atendimento à consulta criada
-    if (consulta?.id) {
-      await supabase
-        .from('documentos')
-        .update({ consulta_id: consulta.id })
-        .eq('agendamento_id', agendamentoId)
-        .is('consulta_id', null)
-    }
-
-    const { error: errEncerrar } = await fila.encerrar(agendamentoId)
-    if (errEncerrar) throw new Error((errEncerrar as any).message)
-
-    try {
-      await useAdminLog().registrar('consulta_encerrada', {
-        entidade: 'consulta',
-        entidadeId: consulta?.id,
-        detalhes: { paciente: pacienteNome, duracao_minutos: duracaoMin },
+      .then(({ data: consulta }) => {
+        if (consulta?.id) {
+          // Vincula documentos à consulta
+          supabase
+            .from('documentos')
+            .update({ consulta_id: consulta.id })
+            .eq('agendamento_id', agendamentoId)
+            .is('consulta_id', null)
+            .then(() => {})
+        }
+        useAdminLog().registrar('consulta_encerrada', {
+          entidade: 'consulta',
+          entidadeId: consulta?.id,
+          detalhes: { paciente: pacienteNome, duracao_minutos: duracaoMin },
+        }).catch(() => {})
       })
-    } catch {}
-    pararTimer()
-    encerrandoModal.value = false
-    evolucao.value = ''
+      .catch(() => {}) // falha silenciosa — status já foi atualizado
+
+    // 3. Chama automaticamente o próximo paciente em checkin
+    await fila.carregar(medicoIdAtual)
+    const proximo = filaStore.filaAtiva.find((a) => a.status === 'checkin')
+    if (proximo && medicoIdAtual) {
+      await fila.chamar(proximo.id, medicoIdAtual, salaSlugAtual ?? undefined)
+      await fila.carregar(medicoIdAtual)
+    }
   } catch (e: any) {
     erroEncerrar.value = e?.message ?? 'Erro ao encerrar consulta'
   } finally {
@@ -392,6 +404,7 @@ onUnmounted(() => {
                   :medico-nome="authStore.medicoData.nome"
                   :medico-c-r-m="authStore.medicoData.crm"
                   :medico-especialidade="authStore.medicoData.especialidade"
+                  :medico-assinatura-url="authStore.medicoData.assinatura_url"
                 />
               </div>
             </div>

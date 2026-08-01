@@ -10,25 +10,27 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
-    "nuxt": "^4.4.2",
-    "vue": "^3.5.32",
-    "vue-router": "^5.0.4",
     "@nuxtjs/supabase": "^1.4.6",
     "@pinia/nuxt": "^0.11.3",
-    "pinia": "^3.0.4",
-    "vee-validate": "^4.14.7",
     "@vee-validate/zod": "^4.14.7",
-    "zod": "^3.24.2",
     "lucide-vue-next": "^0.475.0",
+    "nodemailer": "^8.0.7",
+    "nuxt": "^4.4.2",
     "papaparse": "^5.4.1",
     "pdfmake": "^0.2.13",
-    "xlsx": "^0.18.5"
+    "pinia": "^3.0.4",
+    "vee-validate": "^4.14.7",
+    "vue": "^3.5.32",
+    "vue-router": "^5.0.4",
+    "xlsx": "^0.18.5",
+    "zod": "^3.24.2"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.4",
-    "tailwindcss": "^4.1.4",
+    "@types/nodemailer": "^8.0.0",
     "@types/papaparse": "^5.3.14",
     "@types/pdfmake": "^0.2.9",
+    "tailwindcss": "^4.1.4",
     "typescript": "^5.8.3",
     "vue-tsc": "^2.2.8"
   }

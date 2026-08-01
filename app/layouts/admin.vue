@@ -14,6 +14,8 @@ import {
   Activity,
   DollarSign,
   DoorOpen,
+  CalendarCheck,
+  ChevronDown,
 } from 'lucide-vue-next'
 import { useAuthStore } from '~/stores/auth'
 
@@ -21,18 +23,38 @@ const authStore = useAuthStore()
 const route = useRoute()
 const sidebarOpen = ref(false)
 
-const navItems = [
+const navItemsTop = [
   { label: 'Dashboard', icon: LayoutDashboard, to: '/admin' },
-  { label: 'Atendimentos', icon: ClipboardList, to: '/admin/fila' },
+  { label: 'Fila de Espera', icon: ClipboardList, to: '/admin/fila' },
+  { label: 'Consultas', icon: CalendarCheck, to: '/admin/consultas' },
   { label: 'Importar SUS', icon: Upload, to: '/admin/importar' },
+]
+
+const cadastroItems = [
   { label: 'Médicos', icon: Stethoscope, to: '/admin/medicos' },
   { label: 'Salas', icon: DoorOpen, to: '/admin/salas' },
   { label: 'Pacientes', icon: Users2, to: '/admin/pacientes' },
+]
+
+const navItemsBottom = [
   { label: 'Documentos', icon: FileText, to: '/admin/documentos' },
   { label: 'Relatórios', icon: BarChart3, to: '/admin/relatorios' },
   { label: 'Financeiro', icon: DollarSign, to: '/admin/financeiro' },
   { label: 'Logs', icon: Activity, to: '/admin/logs' },
 ]
+
+const isCadastroActive = computed(() => cadastroItems.some(i => isActive(i.to)))
+const cadastrosOpen = ref(false)
+watch(isCadastroActive, (val) => { if (val) cadastrosOpen.value = true }, { immediate: true })
+
+const allNavItems = computed(() => [...navItemsTop, ...cadastroItems, ...navItemsBottom])
+const currentLabel = computed(() => {
+  if (isCadastroActive.value) {
+    const child = cadastroItems.find(n => isActive(n.to))
+    return child ? `Cadastros › ${child.label}` : 'Cadastros'
+  }
+  return allNavItems.value.find(n => isActive(n.to))?.label ?? 'Painel'
+})
 
 function isActive(to: string) {
   if (to === '/admin') return route.path === '/admin'
@@ -47,72 +69,104 @@ async function logout() {
 </script>
 
 <template>
-  <div class="flex h-screen overflow-hidden" style="background:#f8fafc">
+  <div class="flex h-screen overflow-hidden" style="background:var(--color-bg)">
 
     <!-- ── SIDEBAR DESKTOP ── -->
     <aside
-      class="hidden lg:flex flex-col w-56 shrink-0"
-      style="background:#0f172a;border-right:1px solid #1e293b"
+      class="hidden lg:flex flex-col w-60 shrink-0"
+      style="background:linear-gradient(180deg,#091526 0%,#0d1f3b 100%);border-right:1px solid #162035"
     >
       <!-- Logo -->
-      <div class="px-4 pt-5 pb-4">
-        <div class="flex items-center gap-3">
-          <div
-            class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
-            style="background:linear-gradient(135deg,#059669,#2563eb)"
-          >
-            <Stethoscope :size="15" class="text-white" />
-          </div>
-          <div>
-            <p class="font-bold text-white text-sm leading-tight tracking-tight">SoMedicos</p>
-            <p class="text-[10px] font-medium" style="color:#475569;letter-spacing:0.05em">ADMINISTRAÇÃO</p>
-          </div>
+      <div class="px-4 pt-6 pb-4">
+        <div class="bg-white/95 rounded-xl px-3 py-2.5 flex items-center justify-center" style="box-shadow:0 2px 8px rgba(0,0,0,0.15)">
+          <img src="/logo.png" alt="Central SóMedicos" class="h-16 w-auto" />
         </div>
+        <p class="text-[10px] font-bold text-center mt-2 uppercase tracking-widest" style="color:#2daa8a">ADMINISTRAÇÃO</p>
       </div>
 
       <!-- Divisor -->
-      <div class="mx-3 mb-2" style="height:1px;background:#1e293b" />
+      <div class="mx-4 mb-3" style="height:1px;background:linear-gradient(90deg,transparent,#1e3a5f,transparent)" />
 
       <!-- Nav -->
-      <nav class="flex-1 px-2 py-1 space-y-0.5 overflow-y-auto">
+      <nav class="flex-1 px-3 py-1 space-y-0.5 overflow-y-auto">
+        <!-- Top items -->
         <NuxtLink
-          v-for="item in navItems"
+          v-for="item in navItemsTop"
           :key="item.to"
           :to="item.to"
-          class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium relative group"
-          :style="isActive(item.to)
-            ? 'background:rgba(16,185,129,0.12);color:#34d399'
-            : 'color:#64748b'"
+          class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium relative transition-all"
+          :style="isActive(item.to) ? 'background:rgba(45,170,138,0.16);color:#4dd9be' : 'color:#7099bc'"
         >
-          <!-- indicador lateral ativo -->
-          <span
-            v-if="isActive(item.to)"
-            class="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full"
-            style="background:#10b981"
-          />
-          <component
-            :is="item.icon"
-            :size="15"
-            :style="isActive(item.to) ? 'color:#34d399' : 'color:#475569'"
-          />
+          <span v-if="isActive(item.to)" class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full" style="background:#2daa8a;box-shadow:0 0 8px rgba(45,170,138,0.6)" />
+          <component :is="item.icon" :size="16" :style="isActive(item.to) ? 'color:#2daa8a' : 'color:#4a7a9b'" />
+          <span>{{ item.label }}</span>
+        </NuxtLink>
+
+        <!-- Cadastros group -->
+        <div>
+          <button
+            class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all relative"
+            :style="isCadastroActive ? 'background:rgba(45,170,138,0.16);color:#4dd9be' : 'color:#7099bc'"
+            @click="cadastrosOpen = !cadastrosOpen"
+          >
+            <span v-if="isCadastroActive" class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full" style="background:#2daa8a;box-shadow:0 0 8px rgba(45,170,138,0.6)" />
+            <UserCheck :size="16" :style="isCadastroActive ? 'color:#2daa8a' : 'color:#4a7a9b'" />
+            <span class="flex-1 text-left">Cadastros</span>
+            <ChevronDown
+              :size="14"
+              class="transition-transform duration-200"
+              :style="(cadastrosOpen ? 'transform:rotate(180deg);' : '') + (isCadastroActive ? 'color:#2daa8a' : 'color:#4a7a9b')"
+            />
+          </button>
+          <div v-if="cadastrosOpen" class="ml-3 mt-0.5 space-y-0.5 border-l pl-3" style="border-color:#1e3a5f">
+            <NuxtLink
+              v-for="item in cadastroItems"
+              :key="item.to"
+              :to="item.to"
+              class="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium relative transition-all"
+              :style="isActive(item.to) ? 'background:rgba(45,170,138,0.12);color:#4dd9be' : 'color:#7099bc'"
+            >
+              <component :is="item.icon" :size="15" :style="isActive(item.to) ? 'color:#2daa8a' : 'color:#4a7a9b'" />
+              <span>{{ item.label }}</span>
+            </NuxtLink>
+          </div>
+        </div>
+
+        <!-- Bottom items -->
+        <div class="mx-1 mt-3 mb-1 flex items-center gap-2">
+          <div class="flex-1" style="height:1px;background:linear-gradient(90deg,transparent,#1e3a5f,transparent)" />
+          <span class="text-[9px] font-bold uppercase tracking-widest px-1" style="color:rgba(255,255,255,0.2)">Administrativo</span>
+          <div class="flex-1" style="height:1px;background:linear-gradient(90deg,#1e3a5f,transparent)" />
+        </div>
+        <NuxtLink
+          v-for="item in navItemsBottom"
+          :key="item.to"
+          :to="item.to"
+          class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium relative transition-all"
+          :style="isActive(item.to) ? 'background:rgba(45,170,138,0.16);color:#4dd9be' : 'color:#7099bc'"
+        >
+          <span v-if="isActive(item.to)" class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full" style="background:#2daa8a;box-shadow:0 0 8px rgba(45,170,138,0.6)" />
+          <component :is="item.icon" :size="16" :style="isActive(item.to) ? 'color:#2daa8a' : 'color:#4a7a9b'" />
           <span>{{ item.label }}</span>
         </NuxtLink>
       </nav>
 
       <!-- Perfil -->
       <div class="mt-auto">
-        <div class="mx-3 mb-2" style="height:1px;background:#1e293b" />
-        <div class="px-2 pb-4 space-y-1">
-          <div class="flex items-center gap-2.5 px-3 py-2.5 rounded-lg" style="background:#1e293b">
+        <div class="mx-4 mb-3" style="height:1px;background:linear-gradient(90deg,transparent,#1e3a5f,transparent)" />
+        <div class="px-3 pb-5 space-y-1.5">
+          <div class="flex items-center gap-2.5 px-3 py-2.5 rounded-xl" style="background:rgba(255,255,255,0.06);border:1px solid #1e3050">
             <UiAvatar :name="authStore.profile?.nome" size="sm" />
             <div class="min-w-0 flex-1">
               <p class="text-xs font-semibold text-white truncate">{{ authStore.profile?.nome }}</p>
-              <p class="text-[10px] font-medium" style="color:#475569">Administrador</p>
+              <p class="text-[10px] font-medium" style="color:#4d8faa">Administrador</p>
             </div>
           </div>
           <button
-            class="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors hover:bg-[#1e293b]"
+            class="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all"
             style="color:#f87171"
+            @mouseenter="($event.currentTarget as HTMLElement).style.background='rgba(248,113,113,0.08)'"
+            @mouseleave="($event.currentTarget as HTMLElement).style.background='transparent'"
             @click="logout"
           >
             <LogOut :size="14" />
@@ -136,36 +190,82 @@ async function logout() {
     <Transition name="slide-right">
       <aside
         v-if="sidebarOpen"
-        class="fixed inset-y-0 left-0 z-50 w-56 flex flex-col lg:hidden"
-        style="background:#0f172a"
+        class="fixed inset-y-0 left-0 z-50 w-60 flex flex-col lg:hidden"
+        style="background:linear-gradient(180deg,#091526 0%,#0d1f3b 100%)"
       >
-        <div class="px-4 py-4 flex items-center justify-between" style="border-bottom:1px solid #1e293b">
+        <div class="px-4 py-4 flex items-center justify-between" style="border-bottom:1px solid #162035">
           <div class="flex items-center gap-2.5">
-            <div class="w-7 h-7 rounded-xl flex items-center justify-center"
-          style="background:linear-gradient(135deg,#059669,#2563eb)">
-              <Stethoscope :size="13" class="text-white" />
+            <div class="bg-white/95 rounded-lg px-2 py-1">
+              <img src="/logo.png" alt="Central SóMedicos" class="h-12 w-auto" />
             </div>
-            <span class="font-bold text-white text-sm tracking-tight">SoMedicos</span>
           </div>
-          <button class="text-slate-400 hover:text-white transition-colors" @click="sidebarOpen = false">
+          <button class="text-[#4a7a9b] hover:text-white transition-colors" @click="sidebarOpen = false">
             <X :size="18" />
           </button>
         </div>
-        <nav class="flex-1 px-2 py-2 space-y-0.5">
+        <nav class="flex-1 px-3 py-2 space-y-0.5">
           <NuxtLink
-            v-for="item in navItems"
+            v-for="item in navItemsTop"
             :key="item.to"
             :to="item.to"
-            class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium"
-            :style="isActive(item.to) ? 'background:rgba(16,185,129,0.12);color:#34d399' : 'color:#64748b'"
+            class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium relative"
+            :style="isActive(item.to) ? 'background:rgba(45,170,138,0.16);color:#4dd9be' : 'color:#7099bc'"
             @click="sidebarOpen = false"
           >
-            <component :is="item.icon" :size="15" />
+            <span v-if="isActive(item.to)" class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full" style="background:#2daa8a" />
+            <component :is="item.icon" :size="16" :style="isActive(item.to) ? 'color:#2daa8a' : 'color:#4a7a9b'" />
+            {{ item.label }}
+          </NuxtLink>
+
+          <!-- Cadastros group mobile -->
+          <div>
+            <button
+              class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium relative transition-all"
+              :style="isCadastroActive ? 'background:rgba(45,170,138,0.16);color:#4dd9be' : 'color:#7099bc'"
+              @click="cadastrosOpen = !cadastrosOpen"
+            >
+              <span v-if="isCadastroActive" class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full" style="background:#2daa8a" />
+              <UserCheck :size="16" :style="isCadastroActive ? 'color:#2daa8a' : 'color:#4a7a9b'" />
+              <span class="flex-1 text-left">Cadastros</span>
+              <ChevronDown :size="14" class="transition-transform duration-200" :style="(cadastrosOpen ? 'transform:rotate(180deg);' : '') + (isCadastroActive ? 'color:#2daa8a' : 'color:#4a7a9b')" />
+            </button>
+            <div v-if="cadastrosOpen" class="ml-3 mt-0.5 space-y-0.5 border-l pl-3" style="border-color:#1e3a5f">
+              <NuxtLink
+                v-for="item in cadastroItems"
+                :key="item.to"
+                :to="item.to"
+                class="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium relative"
+                :style="isActive(item.to) ? 'background:rgba(45,170,138,0.12);color:#4dd9be' : 'color:#7099bc'"
+                @click="sidebarOpen = false"
+              >
+                <component :is="item.icon" :size="15" :style="isActive(item.to) ? 'color:#2daa8a' : 'color:#4a7a9b'" />
+                {{ item.label }}
+              </NuxtLink>
+            </div>
+          </div>
+
+          <!-- Admin section divider mobile -->
+          <div class="mx-1 mt-3 mb-1 flex items-center gap-2">
+            <div class="flex-1" style="height:1px;background:linear-gradient(90deg,transparent,#1e3a5f,transparent)" />
+            <span class="text-[9px] font-bold uppercase tracking-widest px-1" style="color:rgba(255,255,255,0.2)">Administrativo</span>
+            <div class="flex-1" style="height:1px;background:linear-gradient(90deg,#1e3a5f,transparent)" />
+          </div>
+
+          <NuxtLink
+            v-for="item in navItemsBottom"
+            :key="item.to"
+            :to="item.to"
+            class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium relative"
+            :style="isActive(item.to) ? 'background:rgba(45,170,138,0.16);color:#4dd9be' : 'color:#7099bc'"
+            @click="sidebarOpen = false"
+          >
+            <span v-if="isActive(item.to)" class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full" style="background:#2daa8a" />
+            <component :is="item.icon" :size="16" :style="isActive(item.to) ? 'color:#2daa8a' : 'color:#4a7a9b'" />
             {{ item.label }}
           </NuxtLink>
         </nav>
-        <div class="px-2 pb-4">
-          <button class="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium" style="color:#f87171" @click="logout">
+        <div class="px-3 pb-4">
+          <button class="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium" style="color:#f87171" @click="logout">
             <LogOut :size="14" /><span>Sair</span>
           </button>
         </div>
@@ -174,6 +274,19 @@ async function logout() {
 
     <!-- ── CONTEÚDO ── -->
     <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+
+      <!-- Topbar desktop -->
+      <header class="hidden lg:flex items-center justify-between px-6 py-3.5 shrink-0 bg-white" style="border-bottom:1px solid var(--color-border);box-shadow:0 1px 0 var(--color-border-light)">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-semibold uppercase tracking-wider" style="color:var(--color-text-dim)">Admin</span>
+          <span class="text-xs" style="color:var(--color-text-dim)">›</span>
+          <span class="text-sm font-semibold" style="color:var(--color-text)">{{ currentLabel }}</span>
+        </div>
+        <div class="flex items-center gap-2 text-xs" style="color:var(--color-text-muted)">
+          <span class="capitalize">{{ new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }) }}</span>
+        </div>
+      </header>
+
       <!-- Topbar mobile -->
       <header
         class="lg:hidden flex items-center gap-3 px-4 py-3 bg-white"
@@ -182,10 +295,10 @@ async function logout() {
         <button class="text-slate-400 hover:text-slate-700 transition-colors" @click="sidebarOpen = true">
           <Menu :size="20" />
         </button>
-        <span class="font-bold text-slate-900 text-sm tracking-tight">SoMedicos</span>
+        <img src="/logo.png" alt="Central SóMedicos" class="h-14 w-auto" />
       </header>
 
-      <main class="flex-1 overflow-y-auto p-5 lg:p-6">
+      <main class="flex-1 overflow-y-auto p-5 lg:p-7 content-dots">
         <slot />
       </main>
     </div>
@@ -194,9 +307,9 @@ async function logout() {
 
 <style scoped>
 /* Hover nos itens da nav sem JS */
-nav a:not([style*="color:#34d399"]):hover {
-  background: rgba(255,255,255,0.06);
-  color: #cbd5e1;
+nav a:not([style*="color:#4dd9be"]):hover {
+  background: rgba(255,255,255,0.07);
+  color: #a8c8e0;
 }
 
 /* Transitions Vue */

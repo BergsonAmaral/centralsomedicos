@@ -86,6 +86,33 @@ function statusMedico(m: typeof medicosStatus.value[0]): 'em_consulta' | 'pausad
   return 'online'
 }
 
+// Contador animado
+const displayed = ref({ filaAgora: 0, emConsulta: 0, concluidosHoje: 0, faltaramHoje: 0, docsPendentes: 0 })
+
+function animateCounter(key: keyof typeof displayed.value, target: number) {
+  const duration = 600
+  const start = displayed.value[key]
+  const diff = target - start
+  if (diff === 0) return
+  const startTime = performance.now()
+  function step(now: number) {
+    const elapsed = now - startTime
+    const progress = Math.min(elapsed / duration, 1)
+    const ease = 1 - Math.pow(1 - progress, 3)
+    displayed.value[key] = Math.round(start + diff * ease)
+    if (progress < 1) requestAnimationFrame(step)
+  }
+  requestAnimationFrame(step)
+}
+
+watch(stats, (val) => {
+  animateCounter('filaAgora', val.filaAgora)
+  animateCounter('emConsulta', val.emConsulta)
+  animateCounter('concluidosHoje', val.concluidosHoje)
+  animateCounter('faltaramHoje', val.faltaramHoje)
+  animateCounter('docsPendentes', val.docsPendentes)
+}, { deep: true })
+
 
 </script>
 
@@ -102,7 +129,7 @@ function statusMedico(m: typeof medicosStatus.value[0]): 'em_consulta' | 'pausad
       <NuxtLink
         to="/admin/fila"
         class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-        style="background:#2563eb;color:white"
+        style="background:#1e4d9a;color:white"
       >
         <ClipboardList :size="16" />
         Atendimentos
@@ -110,42 +137,58 @@ function statusMedico(m: typeof medicosStatus.value[0]): 'em_consulta' | 'pausad
     </div>
 
     <!-- KPIs principais (hero) -->
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
       <!-- Fila -->
-      <div class="rounded-xl p-5 border" style="background:linear-gradient(135deg,#1e3a8a,#1e40af);border-color:#1e40af;color:white">
-        <div class="flex items-center justify-between">
-          <ClipboardList :size="20" style="opacity:0.7" />
-          <span class="text-[10px] uppercase tracking-wider font-semibold" style="opacity:0.7">agora</span>
+      <div class="rounded-2xl p-5 relative overflow-hidden stagger-1" style="background:linear-gradient(135deg,#1a3678 0%,#1e4d9a 60%,#163c7d 100%);box-shadow:0 4px 20px rgba(30,77,154,0.28),0 1px 4px rgba(0,0,0,0.08)">
+        <div class="absolute -right-5 -top-5 w-28 h-28 rounded-full" style="background:rgba(255,255,255,0.06)" />
+        <div class="absolute right-2 -bottom-6 w-16 h-16 rounded-full" style="background:rgba(45,170,138,0.12)" />
+        <div class="flex items-center justify-between mb-4 relative">
+          <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background:rgba(255,255,255,0.18)">
+            <ClipboardList :size="18" style="color:white" />
+          </div>
+          <span class="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full" style="background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.9)">agora</span>
         </div>
-        <p class="text-4xl font-bold mt-3 tabular-nums">{{ carregando ? '—' : stats.filaAgora }}</p>
-        <p class="text-xs mt-1" style="opacity:0.8">Pacientes na fila</p>
+        <p class="text-4xl font-extrabold tabular-nums text-white leading-none relative">{{ carregando ? '—' : displayed.filaAgora }}</p>
+        <p class="text-xs mt-2 relative" style="color:rgba(255,255,255,0.65)">Pacientes na fila</p>
       </div>
+
       <!-- Em consulta -->
-      <div class="rounded-xl p-5 border bg-white" style="border-color:var(--color-border)">
-        <div class="flex items-center justify-between">
-          <Activity :size="20" style="color:#16a34a" />
-          <span class="w-2 h-2 rounded-full animate-pulse" style="background:#16a34a" />
+      <div class="rounded-2xl p-5 bg-white relative overflow-hidden transition-all hover:-translate-y-px stagger-2" style="border:1px solid #d1fae5;box-shadow:0 2px 8px rgba(22,163,74,0.1),0 1px 3px rgba(0,0,0,0.04)">
+        <div class="absolute -right-4 -top-4 w-20 h-20 rounded-full" style="background:rgba(22,163,74,0.05)" />
+        <div class="flex items-center justify-between mb-4">
+          <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background:#dcfce7">
+            <Activity :size="18" style="color:#16a34a" />
+          </div>
+          <span class="w-2.5 h-2.5 rounded-full animate-pulse" style="background:#16a34a;box-shadow:0 0 0 4px rgba(22,163,74,0.15)" />
         </div>
-        <p class="text-4xl font-bold mt-3 tabular-nums" style="color:var(--color-text)">{{ carregando ? '—' : stats.emConsulta }}</p>
-        <p class="text-xs mt-1" style="color:var(--color-text-muted)">Em consulta</p>
+        <p class="text-4xl font-extrabold tabular-nums leading-none" style="color:var(--color-text)">{{ carregando ? '—' : displayed.emConsulta }}</p>
+        <p class="text-xs mt-2" style="color:var(--color-text-muted)">Em consulta</p>
       </div>
+
       <!-- Concluídos -->
-      <div class="rounded-xl p-5 border bg-white" style="border-color:var(--color-border)">
-        <div class="flex items-center justify-between">
-          <CheckCircle2 :size="20" style="color:#0891b2" />
-          <span class="text-[10px] uppercase tracking-wider font-semibold" style="color:var(--color-text-muted)">hoje</span>
+      <div class="rounded-2xl p-5 bg-white relative overflow-hidden transition-all hover:-translate-y-px stagger-3" style="border:1px solid #bae6fd;box-shadow:0 2px 8px rgba(8,145,178,0.08),0 1px 3px rgba(0,0,0,0.04)">
+        <div class="absolute -right-4 -top-4 w-20 h-20 rounded-full" style="background:rgba(8,145,178,0.05)" />
+        <div class="flex items-center justify-between mb-4">
+          <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background:#e0f2fe">
+            <CheckCircle2 :size="18" style="color:#0891b2" />
+          </div>
+          <span class="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full" style="background:#f0f9ff;color:#0891b2">hoje</span>
         </div>
-        <p class="text-4xl font-bold mt-3 tabular-nums" style="color:var(--color-text)">{{ carregando ? '—' : stats.concluidosHoje }}</p>
-        <p class="text-xs mt-1" style="color:var(--color-text-muted)">Concluídos</p>
+        <p class="text-4xl font-extrabold tabular-nums leading-none" style="color:var(--color-text)">{{ carregando ? '—' : displayed.concluidosHoje }}</p>
+        <p class="text-xs mt-2" style="color:var(--color-text-muted)">Concluídos</p>
       </div>
+
       <!-- Faltaram -->
-      <div class="rounded-xl p-5 border bg-white" style="border-color:var(--color-border)">
-        <div class="flex items-center justify-between">
-          <XCircle :size="20" style="color:#dc2626" />
-          <span class="text-[10px] uppercase tracking-wider font-semibold" style="color:var(--color-text-muted)">hoje</span>
+      <div class="rounded-2xl p-5 bg-white relative overflow-hidden transition-all hover:-translate-y-px stagger-4" style="border:1px solid #fecdd3;box-shadow:0 2px 8px rgba(220,38,38,0.08),0 1px 3px rgba(0,0,0,0.04)">
+        <div class="absolute -right-4 -top-4 w-20 h-20 rounded-full" style="background:rgba(220,38,38,0.05)" />
+        <div class="flex items-center justify-between mb-4">
+          <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background:#fee2e2">
+            <XCircle :size="18" style="color:#dc2626" />
+          </div>
+          <span class="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full" style="background:#fff1f2;color:#dc2626">hoje</span>
         </div>
-        <p class="text-4xl font-bold mt-3 tabular-nums" style="color:var(--color-text)">{{ carregando ? '—' : stats.faltaramHoje }}</p>
-        <p class="text-xs mt-1" style="color:var(--color-text-muted)">Faltas</p>
+        <p class="text-4xl font-extrabold tabular-nums leading-none" style="color:var(--color-text)">{{ carregando ? '—' : displayed.faltaramHoje }}</p>
+        <p class="text-xs mt-2" style="color:var(--color-text-muted)">Faltas</p>
       </div>
     </div>
 
@@ -153,7 +196,7 @@ function statusMedico(m: typeof medicosStatus.value[0]): 'em_consulta' | 'pausad
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
       <!-- Status médicos (ocupa 2 colunas) -->
-      <div class="lg:col-span-2 bg-white rounded-xl border" style="border-color:var(--color-border)">
+      <div class="lg:col-span-2 bg-white rounded-2xl border" style="border-color:var(--color-border);box-shadow:0 1px 3px rgba(15,23,42,0.04),0 4px 12px rgba(15,23,42,0.03)">
         <div class="flex items-center justify-between px-5 py-4" style="border-bottom:1px solid var(--color-border-light)">
           <div>
             <h2 class="font-semibold text-[var(--color-text)]">Médicos online</h2>
@@ -165,7 +208,7 @@ function statusMedico(m: typeof medicosStatus.value[0]): 'em_consulta' | 'pausad
         </div>
 
         <div v-if="carregando" class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <div v-for="n in 4" :key="n" class="h-14 rounded-lg animate-pulse" style="background:var(--color-surface-2)" />
+          <div v-for="n in 4" :key="n" class="h-14 rounded-xl animate-shimmer" />
         </div>
 
         <div v-else-if="medicosStatus.length === 0" class="p-10 text-center text-sm text-[var(--color-text-muted)]">
@@ -204,12 +247,13 @@ function statusMedico(m: typeof medicosStatus.value[0]): 'em_consulta' | 'pausad
       <!-- Card lateral: Documentos pendentes + atalhos -->
       <div class="space-y-4">
         <!-- Doc pendentes -->
-        <div class="bg-white rounded-xl border p-5" style="border-color:var(--color-border)">
+        <div class="bg-white rounded-2xl border p-5 relative overflow-hidden" style="border-color:var(--color-border);box-shadow:0 1px 3px rgba(15,23,42,0.04),0 4px 12px rgba(15,23,42,0.03)">
+          <div class="absolute -right-4 -top-4 w-20 h-20 rounded-full" style="background:rgba(217,119,6,0.05)" />
           <div class="flex items-center justify-between mb-3">
             <p class="text-xs font-semibold uppercase tracking-wider" style="color:var(--color-text-muted)">Documentos</p>
             <FileText :size="16" style="color:#a16207" />
           </div>
-          <p class="text-3xl font-bold text-[var(--color-text)]">{{ carregando ? '—' : stats.docsPendentes }}</p>
+          <p class="text-3xl font-bold text-[var(--color-text)]">{{ carregando ? '—' : displayed.docsPendentes }}</p>
           <p class="text-xs text-[var(--color-text-muted)] mt-1">aguardando envio</p>
           <NuxtLink
             to="/admin/documentos"
@@ -221,7 +265,7 @@ function statusMedico(m: typeof medicosStatus.value[0]): 'em_consulta' | 'pausad
         </div>
 
         <!-- Atalhos -->
-        <div class="bg-white rounded-xl border overflow-hidden" style="border-color:var(--color-border)">
+        <div class="bg-white rounded-2xl border overflow-hidden" style="border-color:var(--color-border);box-shadow:0 1px 3px rgba(15,23,42,0.04),0 4px 12px rgba(15,23,42,0.03)">
           <p class="text-xs font-semibold uppercase tracking-wider px-5 pt-4 pb-2" style="color:var(--color-text-muted)">Atalhos</p>
           <NuxtLink
             v-for="link in [
