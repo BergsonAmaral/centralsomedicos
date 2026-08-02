@@ -625,6 +625,35 @@ const mockQueue = [
       </div>
     </section>
 
+    <!-- ── NOSSA EQUIPE ───────────────────────────── -->
+    <section id="equipe" class="py-24 px-4 sm:px-6" style="background:#f8faff">
+      <div class="max-w-5xl mx-auto text-center">
+        <span class="inline-block text-xs font-bold px-3 py-1.5 rounded-full mb-4 uppercase tracking-wide" style="background:#e6f5f1;color:#1a6b56">Nossa Equipe</span>
+        <h2 class="text-3xl sm:text-4xl font-extrabold mb-4 tracking-tight" style="color:#0b1120">Médicos que fazem a diferença</h2>
+        <p class="text-lg max-w-xl mx-auto mb-12" style="color:#64748b">Profissionais experientes, com sólida formação em Atenção Primária e Telemedicina.</p>
+
+        <div class="flex justify-center">
+          <div class="bg-white rounded-3xl border p-6 sm:p-8 flex flex-col sm:flex-row items-center gap-6 text-left max-w-xl transition-all hover:shadow-xl hover:-translate-y-1" style="border-color:#e2e8f4">
+            <img
+              src="/equipe-alex-fernandes.jpg"
+              alt="Dr. Alex Fernandes"
+              class="w-28 h-28 sm:w-32 sm:h-32 rounded-2xl object-cover flex-shrink-0"
+              style="border:2px solid #e2e8f4"
+            />
+            <div>
+              <h3 class="text-lg font-bold" style="color:#0b1120">Alex Fernandes</h3>
+              <p class="text-xs font-semibold mb-2" style="color:#1a6b56">CRM/CE 19594</p>
+              <p class="text-sm leading-relaxed" style="color:#64748b">
+                Médico formado pela FAMENE em João Pessoa/PB há 6 anos, atualmente cursando pós-graduação em Psiquiatria pela USJT.
+                Possui experiência sólida em Atenção Primária e Secundária, com foco em Saúde da Família e Comunidade,
+                além de atuar em Telemedicina e Psiquiatria.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ── CONTATO ────────────────────────────────── -->
     <section id="contato" class="py-28 px-4 sm:px-6 relative overflow-hidden" style="background:linear-gradient(135deg,#080f1e 0%,#0e2550 45%,#0b3326 100%)">
       <div style="position:absolute;width:600px;height:600px;background:radial-gradient(circle,rgba(45,170,138,0.2) 0%,transparent 65%);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none" />
@@ -641,32 +670,98 @@ const mockQueue = [
           Fale com nossa equipe. Sem compromisso, sem burocracia. Apresentamos como a Central SóMedicos se adapta ao seu fluxo — e estamos operacionais em menos de 24h.
         </p>
         <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <a href="mailto:contato@somedicos.com.br"
+          <a href="mailto:contato@centralsomedicos.com.br"
              class="inline-flex items-center gap-2.5 px-8 py-4 rounded-2xl font-bold text-white transition-all hover:scale-[1.03] shadow-xl"
              style="background:linear-gradient(135deg,#2daa8a,#1a6b56)">
             <Mail :size="18" />
-            contato@somedicos.com.br
+            contato@centralsomedicos.com.br
           </a>
-          <a href="https://wa.me/5500000000000"
+          <a href="https://wa.me/5585984050068"
              class="inline-flex items-center gap-2.5 px-8 py-4 rounded-2xl font-semibold transition-all"
              style="background:rgba(255,255,255,0.08);color:white;border:1px solid rgba(255,255,255,0.15)">
             <Phone :size="18" />
-            Chamar no WhatsApp
+            (85) 98405-0068
           </a>
         </div>
+        <p class="mt-8 text-sm" style="color:rgba(255,255,255,0.5)">
+          Suporte das 8h às 18h · Segunda a Sábado
+        </p>
       </div>
     </section>
 
     <!-- ── FOOTER ──────────────────────────────────── -->
-    <footer class="py-10 px-4 sm:px-6" style="background:#06101f;border-top:1px solid rgba(255,255,255,0.06)">
-      <div class="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-5">
-        <img src="/logo.png" alt="Central SóMedicos" style="height:64px;width:auto;filter:brightness(0) invert(1);opacity:0.8" />
-        <p class="text-sm text-center" style="color:rgba(255,255,255,0.6)">© 2026 Central SóMedicos · Uma nova visão da saúde</p>
-        <div class="flex gap-5 text-sm" style="color:rgba(255,255,255,0.6)">
-          <a href="#" class="hover:text-white transition-colors">Privacidade</a>
-          <a href="#" class="hover:text-white transition-colors">Termos</a>
-          <NuxtLink to="/auth/login" class="hover:text-white transition-colors">Plataforma</NuxtLink>
+    <footer class="pt-14 pb-8 px-4 sm:px-6" style="background:#06101f;border-top:1px solid rgba(255,255,255,0.06)">
+      <div class="max-w-6xl mx-auto">
+        <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-8 pb-10" style="border-bottom:1px solid rgba(255,255,255,0.08)">
+          <div class="max-w-xs">
+            <img src="/logo.png" alt="Central SóMedicos" style="height:56px;width:auto;filter:brightness(0) invert(1);opacity:0.85" />
+            <p class="text-sm mt-4 leading-relaxed" style="color:rgba(255,255,255,0.5)">
+              Plataforma de telemedicina que leva atendimento médico com exame físico ao vivo para unidades de saúde, empresas e clínicas.
+            </p>
+            <div class="flex gap-3 mt-5">
+              <a href="https://www.facebook.com" target="_blank" rel="noopener"
+                 class="w-9 h-9 rounded-full flex items-center justify-center transition-colors"
+                 style="background:rgba(255,255,255,0.06)" aria-label="Facebook">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="rgba(255,255,255,0.7)"><path d="M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V15H8v-3h2V9.5C10 7.57 11.57 6 13.5 6H16v3h-2c-.55 0-1 .45-1 1v2h3v3h-3v6.95c5.05-.5 9-4.76 9-9.95Z"/></svg>
+              </a>
+              <a href="https://www.instagram.com" target="_blank" rel="noopener"
+                 class="w-9 h-9 rounded-full flex items-center justify-center transition-colors"
+                 style="background:rgba(255,255,255,0.06)" aria-label="Instagram">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>
+              </a>
+              <a href="https://wa.me/5585984050068" target="_blank" rel="noopener"
+                 class="w-9 h-9 rounded-full flex items-center justify-center transition-colors"
+                 style="background:rgba(255,255,255,0.06)" aria-label="WhatsApp">
+                <Phone :size="15" style="color:rgba(255,255,255,0.7)" />
+              </a>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-8 text-sm">
+            <div>
+              <p class="font-bold mb-3 text-white">Institucional</p>
+              <div class="flex flex-col gap-2" style="color:rgba(255,255,255,0.55)">
+                <a href="#servicos" class="hover:text-white transition-colors">Serviços</a>
+                <a href="#diferenciais" class="hover:text-white transition-colors">Diferenciais</a>
+                <a href="#especialidades" class="hover:text-white transition-colors">Especialidades</a>
+                <a href="#onde-atuamos" class="hover:text-white transition-colors">Onde Atuamos</a>
+              </div>
+            </div>
+            <div>
+              <p class="font-bold mb-3 text-white">Acesso</p>
+              <div class="flex flex-col gap-2" style="color:rgba(255,255,255,0.55)">
+                <a href="#contato" class="hover:text-white transition-colors">Fale conosco</a>
+                <NuxtLink to="/auth/login" class="hover:text-white transition-colors">Plataforma</NuxtLink>
+              </div>
+            </div>
+            <div class="col-span-2 sm:col-span-1">
+              <p class="font-bold mb-3 text-white">Contato</p>
+              <div class="flex flex-col gap-2" style="color:rgba(255,255,255,0.55)">
+                <a href="tel:+5585984050068" class="hover:text-white transition-colors flex items-start gap-2">
+                  <Phone :size="14" class="mt-0.5 flex-shrink-0" />
+                  (85) 98405-0068
+                </a>
+                <div class="flex items-start gap-2">
+                  <MapPin :size="14" class="mt-0.5 flex-shrink-0" />
+                  <span>Av. Ministro José Américo, 326 · Cambeba · Fortaleza/CE</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
+
+        <div class="pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs" style="color:rgba(255,255,255,0.4)">
+          <p class="text-center sm:text-left">
+            CNPJ 15.105.657/0001-90 · Responsável Técnico: Dr. Francimário Gomes de Oliveira · CRM/CE 14940
+          </p>
+          <div class="flex gap-5">
+            <a href="#" class="hover:text-white transition-colors">Política de Privacidade</a>
+            <a href="#" class="hover:text-white transition-colors">Termos de Uso</a>
+          </div>
+        </div>
+        <p class="pt-4 text-center text-xs" style="color:rgba(255,255,255,0.35)">
+          © {{ new Date().getFullYear() }} Central SóMedicos · Uma nova visão da saúde · Todos os direitos reservados
+        </p>
       </div>
     </footer>
 
