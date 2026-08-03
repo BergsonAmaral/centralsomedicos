@@ -48,11 +48,20 @@ const medicoAtual = computed<Medico | null>(() => {
   return pacienteAtual.value.medicos as unknown as Medico
 })
 
+function avisarSaidaSeEmConsulta() {
+  if (pacienteAtual.value?.status === 'em_consulta') {
+    const payload = JSON.stringify({ agendamentoId: pacienteAtual.value.id, quem: 'paciente' })
+    navigator.sendBeacon('/api/agendamentos/desconectar', new Blob([payload], { type: 'application/json' }))
+  }
+}
+
 onMounted(async () => {
   atualizarHora()
   clockInterval = setInterval(atualizarHora, 1000)
   await buscarPacienteAtivo()
   pollingInterval = setInterval(buscarPacienteAtivo, 3000)
+
+  window.addEventListener('pagehide', avisarSaidaSeEmConsulta)
 
   realtimeChannel = supabase
     .channel('sala-generica-realtime')
@@ -76,6 +85,7 @@ onMounted(async () => {
 onUnmounted(() => {
   clearInterval(clockInterval)
   clearInterval(pollingInterval)
+  window.removeEventListener('pagehide', avisarSaidaSeEmConsulta)
   if (realtimeChannel) supabase.removeChannel(realtimeChannel)
 })
 

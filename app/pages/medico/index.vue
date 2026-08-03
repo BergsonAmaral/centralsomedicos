@@ -191,18 +191,29 @@ async function iniciarPainel() {
   pollInterval = setInterval(() => fila.carregar(authStore.medicoId!), 10000)
 }
 
+// Se o médico fechar a aba/navegador durante a consulta, avisa o servidor
+// via sendBeacon para o paciente não ficar preso numa consulta fantasma.
+function avisarSaidaSeEmConsulta() {
+  if (emConsulta.value?.status === 'em_consulta') {
+    const payload = JSON.stringify({ agendamentoId: emConsulta.value.id, quem: 'medico' })
+    navigator.sendBeacon('/api/agendamentos/desconectar', new Blob([payload], { type: 'application/json' }))
+  }
+}
+
 onMounted(async () => {
   // Aguarda o perfil carregar caso ainda não esteja disponível
   if (!authStore.medicoId) {
     await authStore.loadProfile()
   }
   await iniciarPainel()
+  window.addEventListener('pagehide', avisarSaidaSeEmConsulta)
 })
 
 onUnmounted(() => {
   fila.desinscrever()
   pararTimer()
   if (pollInterval) clearInterval(pollInterval)
+  window.removeEventListener('pagehide', avisarSaidaSeEmConsulta)
 })
 </script>
 

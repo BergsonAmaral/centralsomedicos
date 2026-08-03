@@ -72,10 +72,22 @@ if (!medicoData.value) {
   if (ativo) pacienteAtual.value = ativo
 }
 
+// Se o paciente fechar a aba/navegador durante a consulta, avisa o servidor
+// via sendBeacon (funciona mesmo com a página descarregando) para o médico
+// não ficar preso numa consulta fantasma.
+function avisarSaidaSeEmConsulta() {
+  if (pacienteAtual.value?.status === 'em_consulta') {
+    const payload = JSON.stringify({ agendamentoId: pacienteAtual.value.id, quem: 'paciente' })
+    navigator.sendBeacon('/api/agendamentos/desconectar', new Blob([payload], { type: 'application/json' }))
+  }
+}
+
 onMounted(() => {
   atualizarHora()
   clockInterval = setInterval(atualizarHora, 1000)
   pollingInterval = setInterval(buscarPacienteAtivo, 3000)
+
+  window.addEventListener('pagehide', avisarSaidaSeEmConsulta)
 
   if (!medico.value) return
 
@@ -111,6 +123,7 @@ onMounted(() => {
 onUnmounted(() => {
   clearInterval(clockInterval)
   clearInterval(pollingInterval)
+  window.removeEventListener('pagehide', avisarSaidaSeEmConsulta)
   supabase.removeAllChannels()
 })
 
