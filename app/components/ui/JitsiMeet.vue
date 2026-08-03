@@ -38,6 +38,7 @@ async function initJitsi() {
     },
     configOverwrite: {
       prejoinPageEnabled: false,
+      prejoinConfig: { enabled: false },
       startWithVideoMuted: false,
       startWithAudioMuted: false,
       disableDeepLinking: true,
