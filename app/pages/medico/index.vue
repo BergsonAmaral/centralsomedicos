@@ -17,6 +17,11 @@ const processandoAceite = ref(false)
 const timerSeg = ref(0)
 let timerInterval: ReturnType<typeof setInterval> | null = null
 
+// Painel lateral durante a consulta: alterna entre dados do paciente e
+// documentos sem precisar rolar a tela — o médico troca com 1 clique,
+// sem sair da chamada.
+const sidebarTab = ref<'paciente' | 'documentos'>('documentos')
+
 const emConsulta = computed(() => {
   const ag = filaStore.filaAtiva.find((a) => a.status === 'em_consulta')
   return ag ?? null
@@ -393,32 +398,42 @@ onUnmounted(() => {
               <span v-if="proximosFila.length > 3" class="text-xs shrink-0" style="color:#64748b">+{{ proximosFila.length - 3 }}</span>
             </div>
           </div>
+          <!-- Abas fixas: alterna sem rolar a tela, sem sair da chamada -->
+          <div class="shrink-0 flex gap-1 px-3 pt-3" style="background:#1e293b">
+            <button
+              type="button"
+              class="flex-1 py-2 rounded-t-lg text-sm font-semibold transition-colors"
+              :style="sidebarTab === 'paciente'
+                ? 'background:white;color:#0f172a'
+                : 'background:#0f172a;color:#94a3b8'"
+              @click="sidebarTab = 'paciente'"
+            >
+              Paciente
+            </button>
+            <button
+              type="button"
+              class="flex-1 py-2 rounded-t-lg text-sm font-semibold transition-colors"
+              :style="sidebarTab === 'documentos'
+                ? 'background:white;color:#0f172a'
+                : 'background:#0f172a;color:#94a3b8'"
+              @click="sidebarTab = 'documentos'"
+            >
+              Documentos
+            </button>
+          </div>
+
           <!-- Conteúdo rolável -->
-          <div class="flex-1 overflow-y-auto p-4 space-y-3">
-            <div class="bg-white rounded-xl overflow-hidden">
-              <div class="px-4 py-2.5" style="background:#f8fafc;border-bottom:1px solid #e2e8f0">
-                <p class="text-xs font-semibold uppercase tracking-wider" style="color:#475569">Dados do paciente</p>
-              </div>
-              <div class="p-4">
-                <MedicoPacienteAtual :agendamento="emConsulta" />
-              </div>
-            </div>
-            <div class="bg-white rounded-xl overflow-hidden">
-              <div class="px-4 py-2.5" style="background:#f8fafc;border-bottom:1px solid #e2e8f0">
-                <p class="text-xs font-semibold uppercase tracking-wider" style="color:#475569">Emitir documento</p>
-              </div>
-              <div class="p-4">
-                <MedicoDocumentoForm
-                  v-if="authStore.medicoData && authStore.medicoId"
-                  :agendamento="emConsulta"
-                  :medico-id="authStore.medicoId"
-                  :medico-nome="authStore.medicoData.nome"
-                  :medico-c-r-m="authStore.medicoData.crm"
-                  :medico-especialidade="authStore.medicoData.especialidade"
-                  :medico-assinatura-url="authStore.medicoData.assinatura_url"
-                />
-              </div>
-            </div>
+          <div class="flex-1 overflow-y-auto p-4" style="background:white">
+            <MedicoPacienteAtual v-if="sidebarTab === 'paciente'" :agendamento="emConsulta" />
+            <MedicoDocumentoForm
+              v-if="sidebarTab === 'documentos' && authStore.medicoData && authStore.medicoId"
+              :agendamento="emConsulta"
+              :medico-id="authStore.medicoId"
+              :medico-nome="authStore.medicoData.nome"
+              :medico-c-r-m="authStore.medicoData.crm"
+              :medico-especialidade="authStore.medicoData.especialidade"
+              :medico-assinatura-url="authStore.medicoData.assinatura_url"
+            />
           </div>
         </div>
 
