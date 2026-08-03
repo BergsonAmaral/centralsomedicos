@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { PenLine, CheckCircle2, AlertCircle, Trash2, Upload } from 'lucide-vue-next'
+import { PenLine, CheckCircle2, AlertCircle, Trash2, Upload, Stamp, Clock } from 'lucide-vue-next'
 
 definePageMeta({ layout: 'medico', middleware: ['auth', 'role'] })
 
@@ -179,6 +179,48 @@ async function removerAssinatura() {
           <li>Você pode redesenhar a qualquer momento — a versão mais recente será usada</li>
         </ul>
       </div>
+    </div>
+
+    <!-- Card Prescrição Digital (Memed) -->
+    <div class="bg-white rounded-2xl border p-6 space-y-5" style="border-color:var(--color-border)">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style="background:#f5f3ff">
+          <Stamp :size="18" style="color:#7c3aed" />
+        </div>
+        <div class="flex-1">
+          <h2 class="font-semibold text-[var(--color-text)] flex items-center gap-2">
+            Prescrição Digital (Memed)
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide" style="background:#fef9c3;color:#a16207">Em breve</span>
+          </h2>
+          <p class="text-xs mt-0.5" style="color:#64748b">
+            Receitas com assinatura digital certificada, com validade jurídica para medicamentos controlados.
+          </p>
+        </div>
+      </div>
+
+      <div
+        class="rounded-xl p-4 flex items-start gap-3 text-sm"
+        style="background:#f5f3ff;border:1px solid #ddd6fe;color:#5b21b6"
+      >
+        <Clock :size="16" class="shrink-0 mt-0.5" />
+        <div>
+          <p class="font-semibold">Aguardando aprovação da integração</p>
+          <p class="text-xs mt-1" style="color:#7c5cd6">
+            A Central SóMedicos está em processo de credenciamento como parceira Memed.
+            Assim que aprovado, você poderá conectar sua conta pessoal Memed aqui e prescrever
+            direto por esta tela, com assinatura digital válida.
+          </p>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        disabled
+        class="w-full py-2.5 rounded-xl text-sm font-semibold cursor-not-allowed opacity-60"
+        style="background:#f1f5f9;color:#64748b"
+      >
+        Conectar conta Memed (indisponível no momento)
+      </button>
     </div>
 
   </div>
