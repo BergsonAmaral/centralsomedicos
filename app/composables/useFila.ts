@@ -142,7 +142,11 @@ export const useFila = () => {
   }
 
   async function marcarFaltou(id: string) {
-    return supabase.from('agendamentos').update({ status: 'faltou' }).eq('id', id)
+    return supabase
+      .from('agendamentos')
+      .update({ status: 'faltou' })
+      .eq('id', id)
+      .in('status', ['agendado', 'checkin'])
   }
 
   function subscrever(medicoId?: string | null) {

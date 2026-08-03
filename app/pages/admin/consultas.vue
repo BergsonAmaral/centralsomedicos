@@ -162,12 +162,33 @@ function abrirEdit(ag: (typeof agendamentos.value)[0]) {
 async function salvarEdit() {
   if (!editModal.value) return
   salvandoEdit.value = true
-  await supabase.from('agendamentos').update({
+
+  const statusAnterior = editModal.value.status
+  const novoStatus = editForm.value.status as AgendamentoStatus
+  const agora = new Date().toISOString()
+
+  const payload: Record<string, unknown> = {
     medico_id: editForm.value.medico_id || null,
     data_consulta: editForm.value.data_consulta,
     motivo: editForm.value.motivo || null,
-    status: editForm.value.status as AgendamentoStatus,
-  }).eq('id', editModal.value.id)
+    status: novoStatus,
+  }
+
+  // Sincroniza os timestamps de fila quando o admin muda o status manualmente,
+  // senão os tempos de espera/duração exibidos na fila ficam incorretos.
+  if (novoStatus !== statusAnterior) {
+    if (novoStatus === 'checkin' && !editModal.value.checkin_em) {
+      payload.checkin_em = agora
+    }
+    if (['aguardando_medico', 'em_consulta'].includes(novoStatus) && !editModal.value.chamado_em) {
+      payload.chamado_em = agora
+    }
+    if (['concluido', 'aguardando_avaliacao', 'cancelado', 'faltou'].includes(novoStatus) && !editModal.value.encerrado_em) {
+      payload.encerrado_em = agora
+    }
+  }
+
+  await supabase.from('agendamentos').update(payload).eq('id', editModal.value.id)
   editModal.value = null
   salvandoEdit.value = false
   await carregar()

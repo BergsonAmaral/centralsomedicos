@@ -116,10 +116,19 @@ onUnmounted(() => {
 
 async function entrarConsulta() {
   if (!pacienteAtual.value) return
-  await supabase
+  const { data, error } = await supabase
     .from('agendamentos')
     .update({ status: 'em_consulta' })
     .eq('id', pacienteAtual.value.id)
+    .eq('status', 'aguardando_paciente')
+    .select()
+    .maybeSingle()
+
+  if (error || !data) {
+    alert('Não foi possível entrar na consulta agora. Atualize a página e tente novamente.')
+    return
+  }
+  pacienteAtual.value = data
 }
 </script>
 
