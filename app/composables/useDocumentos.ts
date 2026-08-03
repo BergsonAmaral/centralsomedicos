@@ -347,5 +347,32 @@ export const useDocumentos = () => {
     }
   }
 
-  return { gerarEFazerUpload, salvarDocumento, gerarESalvar, formatarCPF, calcularIdade }
+  /**
+   * Salva um documento gerado fora do sistema (ex: Memed) — sem gerar PDF,
+   * apenas registra o link informado pelo médico como pdf_url.
+   */
+  async function salvarDocumentoExterno(opts: {
+    tipo: DocumentoTipo
+    medicoId: string
+    pacienteId: string
+    agendamentoId: string
+    link: string
+  }): Promise<{ ok: boolean, error?: string }> {
+    if (!/^https?:\/\//i.test(opts.link.trim())) {
+      return { ok: false, error: 'Cole um link válido (começando com http:// ou https://)' }
+    }
+    const { error } = await salvarDocumento({
+      consultaId: null,
+      agendamentoId: opts.agendamentoId,
+      medicoId: opts.medicoId,
+      pacienteId: opts.pacienteId,
+      tipo: opts.tipo,
+      conteudo: { origem: 'memed', link: opts.link.trim() },
+      pdfUrl: opts.link.trim(),
+    })
+    if (error) return { ok: false, error: error.message }
+    return { ok: true }
+  }
+
+  return { gerarEFazerUpload, salvarDocumento, gerarESalvar, salvarDocumentoExterno, formatarCPF, calcularIdade }
 }

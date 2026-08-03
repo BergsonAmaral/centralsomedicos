@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {
   FileText, FlaskConical, Pill, ShieldCheck, Send, ClipboardCheck,
-  Plus, Trash2, CheckCircle2, ExternalLink, AlertCircle, Loader2,
+  Plus, Trash2, CheckCircle2, ExternalLink, AlertCircle, Loader2, Stamp,
 } from 'lucide-vue-next'
 import type { Agendamento, DocumentoTipo } from '~/types'
 
@@ -14,13 +14,47 @@ const props = defineProps<{
   medicoAssinaturaUrl?: string | null
 }>()
 
-const { gerarESalvar } = useDocumentos()
+const { gerarESalvar, salvarDocumentoExterno } = useDocumentos()
 
 type TabKey = DocumentoTipo
 const tab = ref<TabKey>('atestado')
 const gerando = ref(false)
 const ultimoPdfUrl = ref<string | null>(null)
 const ultimoErro = ref('')
+
+// ── Prescrição via Memed (solução intermediária, sem integração API) ──────
+const linkMemed = ref('')
+const salvandoMemed = ref(false)
+const erroMemed = ref('')
+
+const ehAbaReceita = computed(() => tab.value === 'receita' || tab.value === 'receita_controlada')
+
+function abrirMemed() {
+  window.open('https://memed.com.br', '_blank', 'noopener,noreferrer')
+}
+
+async function salvarReceitaMemed() {
+  if (!paciente.value?.id) return
+  erroMemed.value = ''
+  salvandoMemed.value = true
+  try {
+    const result = await salvarDocumentoExterno({
+      tipo: tab.value,
+      medicoId: props.medicoId,
+      pacienteId: paciente.value.id,
+      agendamentoId: props.agendamento.id,
+      link: linkMemed.value,
+    })
+    if (result.ok) {
+      ultimoPdfUrl.value = linkMemed.value.trim()
+      linkMemed.value = ''
+    } else {
+      erroMemed.value = result.error ?? 'Erro ao salvar link'
+    }
+  } finally {
+    salvandoMemed.value = false
+  }
+}
 
 const paciente = computed(() => props.agendamento.pacientes as any)
 
@@ -174,6 +208,48 @@ const tabAtiva = computed(() => TABS.find((t) => t.key === tab.value)!)
     </div>
 
     <div v-if="!ultimoPdfUrl">
+      <!-- Prescrição via Memed (receita / receita controlada) -->
+      <div v-if="ehAbaReceita" class="rounded-xl p-4 mb-4 space-y-3" style="background:#f5f3ff;border:1px solid #ddd6fe">
+        <div class="flex items-start gap-2.5">
+          <Stamp :size="16" style="color:#7c3aed" class="shrink-0 mt-0.5" />
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-semibold" style="color:#5b21b6">Prescrever com assinatura digital (Memed)</p>
+            <p class="text-xs mt-0.5" style="color:#7c5cd6">
+              Abra sua conta pessoal Memed, prescreva normalmente e cole aqui o link da receita gerada.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
+          style="background:#7c3aed;color:white"
+          @click="abrirMemed"
+        >
+          <ExternalLink :size="13" /> Abrir Memed em nova aba
+        </button>
+        <div class="flex gap-2">
+          <input
+            v-model="linkMemed"
+            placeholder="Cole aqui o link da receita gerada na Memed"
+            class="flex-1 px-3 py-2 rounded-lg border text-sm"
+            style="border-color:#ddd6fe;background:white"
+          >
+          <button
+            type="button"
+            :disabled="!linkMemed.trim() || salvandoMemed"
+            class="px-3 py-2 rounded-lg text-xs font-semibold shrink-0 disabled:opacity-40"
+            style="background:#5b21b6;color:white"
+            @click="salvarReceitaMemed"
+          >
+            {{ salvandoMemed ? 'Salvando…' : 'Salvar' }}
+          </button>
+        </div>
+        <p v-if="erroMemed" class="text-xs" style="color:#b91c1c">{{ erroMemed }}</p>
+        <p class="text-xs" style="color:#7c5cd6">
+          Ou preencha o formulário abaixo para gerar um PDF simples sem assinatura digital certificada.
+        </p>
+      </div>
+
       <!-- Atestado -->
       <div v-if="tab === 'atestado'" class="space-y-3">
         <div class="grid grid-cols-2 gap-3">
