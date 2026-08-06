@@ -165,9 +165,9 @@ const specialties = [
 ]
 
 const steps = [
-  { n: '01', title: 'Você nos contacta', desc: 'Apresentamos a plataforma e elaboramos uma proposta alinhada ao seu fluxo.', video: '/video-passo1-contato.mp4' },
-  { n: '02', title: 'Instalamos tudo', desc: 'Nossa equipe vai até você — equipamentos, plataforma, médicos e treinamento. Operacional no mesmo dia.', video: '/video-passo2-instalacao.mp4' },
-  { n: '03', title: 'Atendimento com qualidade', desc: 'Teleconsultas com exame físico real, prontuário completo e documentos automáticos.', video: '/video-passo3-atendimento.mp4' },
+  { n: '01', title: 'Você nos contacta', desc: 'Apresentamos a plataforma e elaboramos uma proposta alinhada ao seu fluxo.', video: '/video-passo1-contato.mp4', poster: '/passo1-contato-poster.jpg' },
+  { n: '02', title: 'Instalamos tudo', desc: 'Nossa equipe vai até você — equipamentos, plataforma, médicos e treinamento. Operacional no mesmo dia.', video: '/video-passo2-instalacao.mp4', poster: '/passo2-instalacao-poster.jpg' },
+  { n: '03', title: 'Atendimento com qualidade', desc: 'Teleconsultas com exame físico real, prontuário completo e documentos automáticos.', video: '/video-passo3-atendimento.mp4', poster: '/passo3-atendimento-poster.jpg' },
 ]
 
 const where = [
@@ -275,7 +275,7 @@ onUnmounted(() => {
         <video
           class="hero-photo"
           src="/video-hero-teleconsulta.mp4"
-          poster="/foto-teleconsulta.jpg"
+          poster="/hero-poster.jpg"
           autoplay muted loop playsinline
         />
       </div>
@@ -396,7 +396,7 @@ onUnmounted(() => {
           <video
             class="features-photo"
             src="/video-dispositivo-bt.mp4"
-            poster="/foto-teleconsulta.jpg"
+            poster="/dispositivo-bt-poster.jpg"
             autoplay muted loop playsinline
           />
         </div>
@@ -535,6 +535,7 @@ onUnmounted(() => {
           <div class="step-img-wrap">
             <video
               :src="s.video"
+              :poster="s.poster"
               class="step-img"
               autoplay muted loop playsinline
             />
@@ -556,6 +557,7 @@ onUnmounted(() => {
         <video
           class="where-banner-video"
           src="/video-onde-atuamos.mp4"
+          poster="/onde-atuamos-poster.jpg"
           autoplay muted loop playsinline
         />
         <div class="where-banner-ov" />
