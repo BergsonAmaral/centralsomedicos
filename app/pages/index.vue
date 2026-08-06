@@ -2,102 +2,161 @@
 import {
   Bluetooth, Users, Video, FileText, Building2, Activity,
   CheckCircle2, ArrowRight, HeartPulse, Stethoscope,
-  Menu, X as XIcon, Phone, Mail,
-  Brain, Bone, Heart, Eye, Baby, FlaskConical, MapPin, Sparkles,
-  Zap, Shield, ChevronRight, Truck,
+  Phone, Mail, Brain, Bone, Heart, Eye, Baby, FlaskConical,
+  MapPin, Zap, Truck, MessageCircle, ChevronRight,
 } from 'lucide-vue-next'
 
 definePageMeta({ layout: false })
 
 const supabase = useSupabaseClient()
-const user = useSupabaseUser()
-const checking = ref(true)
-const mobileMenu = ref(false)
-
-// ── Scroll: progresso, navbar reativa, parallax, botão "topo" ──────────────
+const user     = useSupabaseUser()
+const checking    = ref(true)
+const mobileMenu  = ref(false)
 const scrollProgress = ref(0)
-const navScrolled = ref(false)
-const showBackToTop = ref(false)
-const parallaxY = ref(0)
+const navScrolled    = ref(false)
+const showBackToTop  = ref(false)
+const parallaxY      = ref(0)
+const reducedMotion  = ref(false)
+
+/* ── Scroll-driven refs ─────────────────────────────────────────── */
+const heroOpacity   = ref(1)
+const heroShift     = ref(0)
+const statementEl   = ref<HTMLElement | null>(null)
+const demoEl        = ref<HTMLElement | null>(null)
+const ctaEl         = ref<HTMLElement | null>(null)
+const wordsOn       = ref(0)
+const statementProgress = ref(0)
+const demoTiltX     = ref(10)
+const demoScale     = ref(0.95)
+const demoOpacity   = ref(0)
+const ctaBgShift    = ref(0)
+
+const statementWords = (
+  'Levamos médicos especializados em telemedicina, a plataforma e toda a telemetria Bluetooth ' +
+  'direto para a sua unidade de saúde. Um único fornecedor. Uma única responsabilidade.'
+).split(' ')
+
+/* ── Animated counters ──────────────────────────────────────────── */
+const displayNums = ref(['< 1', '0', '0', '0'])
+const numTargets: (number | null)[] = [null, 6, 100, 24]
+let counted = false
+function runCounters() {
+  if (counted) return
+  counted = true
+  if (reducedMotion.value) {
+    displayNums.value = ['< 1', '6', '100', '24']
+    return
+  }
+  const t0 = performance.now()
+  const dur = 1500
+  const tick = (t: number) => {
+    const p = Math.min(1, (t - t0) / dur)
+    const e = 1 - Math.pow(1 - p, 3)
+    numTargets.forEach((tg, i) => {
+      if (tg != null) displayNums.value[i] = String(Math.round(tg * e))
+    })
+    if (p < 1) requestAnimationFrame(tick)
+  }
+  requestAnimationFrame(tick)
+}
+
+/* ── Cursor ─────────────────────────────────────────────────────── */
+const cursorX    = ref(-200)
+const cursorY    = ref(-200)
+const ringX      = ref(-200)
+const ringY      = ref(-200)
+const cursorHover = ref(false)
+let _rx = -200, _ry = -200, _tx = -200, _ty = -200
+let rafId: number | null = null
+let vitalInterval: ReturnType<typeof setInterval> | null = null
+
+function animateRing() {
+  _rx += (_tx - _rx) * 0.1
+  _ry += (_ty - _ry) * 0.1
+  ringX.value = _rx
+  ringY.value = _ry
+  rafId = requestAnimationFrame(animateRing)
+}
+
+/* ── Scroll ──────────────────────────────────────────────────────── */
+const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v))
+let scrollTicking = false
+
+function updateScrollFX() {
+  scrollTicking = false
+  const st = window.scrollY
+  const vh = window.innerHeight
+  const dh = document.documentElement.scrollHeight - vh
+  scrollProgress.value = dh > 0 ? Math.min(100, (st / dh) * 100) : 0
+  navScrolled.value   = st > 60
+  showBackToTop.value = st > 700
+  parallaxY.value     = st
+
+  if (reducedMotion.value) {
+    heroOpacity.value = 1; heroShift.value = 0
+    wordsOn.value = statementWords.length
+    demoTiltX.value = 0; demoScale.value = 1; demoOpacity.value = 1
+    ctaBgShift.value = 0
+    return
+  }
+
+  /* Hero content fades + drifts away while scrolling past */
+  heroOpacity.value = clamp(1 - st / (vh * 0.55), 0, 1)
+  heroShift.value   = st * 0.28
+
+  /* Statement: pinned section — words light up while it's sticky-pinned to the viewport */
+  if (statementEl.value) {
+    const r = statementEl.value.getBoundingClientRect()
+    const p = clamp(-r.top / Math.max(1, r.height - vh), 0, 1)
+    statementProgress.value = p
+    wordsOn.value = Math.round(p * statementWords.length * 1.08)
+  }
+
+  /* Demo window: untilt + scale in as it enters the viewport */
+  if (demoEl.value) {
+    const r = demoEl.value.getBoundingClientRect()
+    const p = clamp((vh - r.top) / (vh * 0.75), 0, 1)
+    const e = 1 - Math.pow(1 - p, 2)
+    demoTiltX.value   = (1 - e) * 12
+    demoScale.value   = 0.94 + e * 0.06
+    demoOpacity.value = clamp(e * 1.4, 0, 1)
+  }
+
+  /* CTA giant background text drifts sideways with scroll */
+  if (ctaEl.value) {
+    const r = ctaEl.value.getBoundingClientRect()
+    ctaBgShift.value = clamp((vh - r.top) * 0.1, -80, 240)
+  }
+}
 
 function onScroll() {
-  const scrollTop = window.scrollY
-  const docHeight = document.documentElement.scrollHeight - window.innerHeight
-  scrollProgress.value = docHeight > 0 ? Math.min(100, (scrollTop / docHeight) * 100) : 0
-  navScrolled.value = scrollTop > 24
-  showBackToTop.value = scrollTop > 700
-  parallaxY.value = scrollTop
-}
-
-function scrollToTop() {
-  window.scrollTo({ top: 0, behavior: 'smooth' })
-}
-
-onMounted(async () => {
-  if (user.value) {
-    const { data } = await supabase.from('profiles').select('role').eq('id', user.value.id).single()
-    if (data?.role === 'admin') return navigateTo('/admin')
-    if (data?.role === 'medico') return navigateTo('/medico')
+  if (!scrollTicking) {
+    scrollTicking = true
+    requestAnimationFrame(updateScrollFX)
   }
-  checking.value = false
-  await nextTick()
-  const io = new IntersectionObserver(
-    (entries) => entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible') }),
-    { threshold: 0.1 }
-  )
-  document.querySelectorAll('.reveal').forEach(el => io.observe(el))
+}
+function scrollToTop() { window.scrollTo({ top: 0, behavior: 'smooth' }) }
 
-  window.addEventListener('scroll', onScroll, { passive: true })
-  onScroll()
-})
+/* ── Live vitals ──────────────────────────────────────────────────── */
+const liveVitals = ref([
+  { l: 'Pressão',  v: '120/80', unit: 'mmHg',  },
+  { l: 'Pulso',    v: '72',     unit: 'bpm',   },
+  { l: 'SpO₂',    v: '98',     unit: '%',     },
+  { l: 'Glicemia', v: '95',    unit: 'mg/dL', },
+])
 
-onUnmounted(() => {
-  window.removeEventListener('scroll', onScroll)
-})
-
-const services = [
-  {
-    icon: Video,
-    title: 'Teleconsulta com Exame Físico',
-    desc: 'Realizamos consultas remotas com coleta de sinais vitais em tempo real. O médico vê os dados do paciente na mesma tela da videoconferência.',
-    accent: '#1e4d9a', bg: '#e8eef8',
-  },
-  {
-    icon: Bluetooth,
-    title: 'Sinais Vitais via Bluetooth',
-    desc: 'Pressão arterial, pulso, saturação, temperatura, glicemia e bioimpedância capturados sem fio durante a consulta remota — com precisão clínica.',
-    accent: '#2daa8a', bg: '#e6f5f1',
-  },
-  {
-    icon: Activity,
-    title: 'Prontuário Digital Completo',
-    desc: 'Todo o histórico do paciente centralizado: triagem, evolução médica, sinais vitais e documentos. Acessível em tempo real por qualquer profissional autorizado.',
-    accent: '#1e4d9a', bg: '#e8eef8',
-  },
-  {
-    icon: FileText,
-    title: 'Documentos Clínicos Automáticos',
-    desc: 'Receitas, atestados, pedidos de exame e encaminhamentos gerados em PDF com link seguro ao paciente. Rastreabilidade total.',
-    accent: '#2daa8a', bg: '#e6f5f1',
-  },
-  {
-    icon: Users,
-    title: 'Gestão de Fila em Tempo Real',
-    desc: 'Fila digital com atualização instantânea para recepção, médico e sala. Check-in, triagem e chamada sem papel e sem atrasos.',
-    accent: '#1e4d9a', bg: '#e8eef8',
-  },
-  {
-    icon: Building2,
-    title: 'Integração com a Rede SUS',
-    desc: 'Importamos a agenda do SUS, cadastramos os pacientes e gerenciamos os agendamentos. Tudo integrado ao fluxo já existente da sua unidade.',
-    accent: '#2daa8a', bg: '#e6f5f1',
-  },
+/* ── Static data ────────────────────────────────────────────────── */
+const featureList = [
+  { title: 'Médicos treinados em telemedicina', desc: 'Corpo clínico especializado incluso — sem recrutar, treinar ou gerenciar equipe médica.' },
+  { title: 'Sinais vitais via Bluetooth', desc: 'Pressão, SpO₂, glicemia, temperatura e mais capturados sem fio durante a consulta.' },
+  { title: 'Prontuário e documentos automáticos', desc: 'Receitas, atestados e pedidos de exame em PDF gerados ao fim de cada consulta.' },
+  { title: 'Operacional em menos de 24h', desc: 'Nossa equipe instala e configura tudo — você só precisa abrir as portas.' },
 ]
 
 const specialties = [
-  { icon: Heart,        label: 'Cardiologia e Risco Cirúrgico' },
+  { icon: Heart,        label: 'Cardiologia' },
   { icon: Brain,        label: 'Saúde Mental' },
-  { icon: Bone,         label: 'Ortopedia e Traumatologia' },
+  { icon: Bone,         label: 'Ortopedia' },
   { icon: Eye,          label: 'Dermatologia' },
   { icon: Baby,         label: 'Pediatria' },
   { icon: FlaskConical, label: 'Endocrinologia' },
@@ -106,870 +165,1593 @@ const specialties = [
 ]
 
 const steps = [
-  {
-    n: '01', title: 'Você nos contacta',
-    desc: 'Apresentamos a plataforma, entendemos o seu fluxo de atendimento e elaboramos uma proposta alinhada à realidade da sua instituição.',
-    img: '/ilustra-passo1-contato.png',
-  },
-  {
-    n: '02', title: 'Instalamos tudo na sua unidade',
-    desc: 'Nossa equipe vai até você — configura a infraestrutura física, os equipamentos de telemetria, médicos, salas e fluxos. Treinamos recepcionistas e equipe de saúde. Operacional no mesmo dia.',
-    img: '/ilustra-passo2-instalacao.png',
-  },
-  {
-    n: '03', title: 'Atendimento com qualidade',
-    desc: 'Teleconsultas com exame físico real, prontuário completo e documentos automáticos. Seus pacientes saem com toda a documentação em mãos.',
-    img: '/ilustra-passo3-atendimento.png',
-  },
+  { n: '01', title: 'Você nos contacta', desc: 'Apresentamos a plataforma e elaboramos uma proposta alinhada ao seu fluxo.', video: '/video-passo1-contato.mp4' },
+  { n: '02', title: 'Instalamos tudo', desc: 'Nossa equipe vai até você — equipamentos, plataforma, médicos e treinamento. Operacional no mesmo dia.', video: '/video-passo2-instalacao.mp4' },
+  { n: '03', title: 'Atendimento com qualidade', desc: 'Teleconsultas com exame físico real, prontuário completo e documentos automáticos.', video: '/video-passo3-atendimento.mp4' },
 ]
 
 const where = [
-  { icon: Building2,  title: 'Hospitais e Clínicas',      desc: 'Instalamos a estrutura completa de teleconsulta — equipamentos, plataforma e médicos — integrada ao fluxo já existente da sua unidade.', c: '#1e4d9a', bg: '#e8eef8', img: '/ilustra-hospital.png' },
-  { icon: MapPin,     title: 'UBS e Postos de Saúde',      desc: 'Gestão de filas SUS, importação de agenda e acesso a especialistas remotos. Estrutura instalada na unidade, sem obras.', c: '#2daa8a', bg: '#e6f5f1', img: '/ilustra-ubs.png' },
-  { icon: Truck,      title: 'Atendimento Itinerante',      desc: 'Levamos toda a estrutura até municípios remotos, feiras de saúde e campanhas móveis. Teleconsultas com exame físico onde o paciente está.', c: '#2daa8a', bg: '#e6f5f1', img: '/ilustra-itinerante.png' },
-  { icon: HeartPulse, title: 'Regiões Remotas e Rurais',   desc: 'Especialistas médicos a municípios sem acesso presencial — com telemetria Bluetooth ao vivo e prontuário digital completo.', c: '#1e4d9a', bg: '#e8eef8', img: '/ilustra-rural.png' },
+  { title: 'Hospitais e Clínicas',    img: '/ilustra-hospital.png',    tag: 'FIXED'    },
+  { title: 'UBS e Postos de Saúde',   img: '/ilustra-ubs.png',         tag: 'FIXED'    },
+  { title: 'Atendimento Itinerante',  img: '/ilustra-itinerante.png',  tag: 'MOBILE'   },
+  { title: 'Regiões Rurais',          img: '/ilustra-rural.png',       tag: 'REMOTE'   },
 ]
 
 const numbers = [
-  { value: '< 1 dia', label: 'Para estar operacional' },
-  { value: '6+',      label: 'Dispositivos BT suportados' },
-  { value: '100%',    label: 'Baseado em nuvem' },
-  { value: '24/7',    label: 'Suporte disponível' },
-]
-
-const compare = [
-  { label: 'Médicos inclusos no serviço',            nos: true,  hardware: false, soSoftware: false },
-  { label: 'Telemetria Bluetooth inclusa',            nos: true,  hardware: false, soSoftware: false },
-  { label: 'Implantação em menos de 24h',            nos: true,  hardware: false, soSoftware: true  },
-  { label: 'Integração nativa com SUS',              nos: true,  hardware: false, soSoftware: false },
-  { label: 'Suporte operacional incluso',            nos: true,  hardware: false, soSoftware: false },
-  { label: 'Exame físico real durante teleconsulta', nos: true,  hardware: true,  soSoftware: false },
+  { value: '< 1',   suffix: 'dia',  label: 'Para estar operacional' },
+  { value: '6',     suffix: '+',    label: 'Dispositivos BT suportados' },
+  { value: '100',   suffix: '%',    label: 'Baseado em nuvem' },
+  { value: '24',    suffix: '/7',   label: 'Suporte disponível' },
 ]
 
 const mockQueue = [
-  { initials: 'MA', name: 'Maria Aparecida', status: 'Aguardando triagem', c: '#1e4d9a', badge: 'Na fila' },
-  { initials: 'JC', name: 'José Carlos',     status: 'Triagem concluída',  c: '#2daa8a', badge: 'Pronto' },
-  { initials: 'AS', name: 'Ana Silva',       status: 'Em consulta',        c: '#163c7d', badge: 'Consultando' },
+  { initials: 'MA', name: 'Maria Aparecida', status: 'Em consulta',        badge: 'Consultando' },
+  { initials: 'JC', name: 'José Carlos',     status: 'Triagem concluída',  badge: 'Pronto' },
+  { initials: 'AS', name: 'Ana Silva',       status: 'Aguardando triagem', badge: 'Na fila' },
 ]
+
+/* ── Lifecycle ──────────────────────────────────────────────────── */
+onMounted(async () => {
+  if (user.value) {
+    const { data } = await supabase.from('profiles').select('role').eq('id', user.value.id).single()
+    if (data?.role === 'admin') return navigateTo('/admin')
+    if (data?.role === 'medico') return navigateTo('/medico')
+  }
+  checking.value = false
+  await nextTick()
+
+  reducedMotion.value = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+  /* Reveal observer */
+  const io = new IntersectionObserver(
+    entries => entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible') }),
+    { threshold: 0.07 }
+  )
+  document.querySelectorAll('.reveal, .reveal-l, .reveal-r').forEach(el => io.observe(el))
+
+  /* Counters fire once when the stats strip becomes visible */
+  const statsSection = document.querySelector('.s-stats')
+  if (statsSection) {
+    const statsIo = new IntersectionObserver(
+      entries => entries.forEach(e => { if (e.isIntersecting) { runCounters(); statsIo.disconnect() } }),
+      { threshold: 0.3 }
+    )
+    statsIo.observe(statsSection)
+  }
+
+  /* Cursor */
+  const onMove = (e: MouseEvent) => {
+    _tx = e.clientX; _ty = e.clientY
+    cursorX.value = e.clientX; cursorY.value = e.clientY
+  }
+  const onEnter = () => { cursorHover.value = true }
+  const onLeave = () => { cursorHover.value = false }
+  document.addEventListener('mousemove', onMove)
+  document.querySelectorAll('a, button').forEach(el => {
+    el.addEventListener('mouseenter', onEnter)
+    el.addEventListener('mouseleave', onLeave)
+  })
+  animateRing()
+
+  /* Vitals */
+  vitalInterval = setInterval(() => {
+    liveVitals.value[1].v = String(68 + Math.floor(Math.random() * 8))
+    liveVitals.value[2].v = String(96 + Math.floor(Math.random() * 3))
+  }, 2400)
+
+  window.addEventListener('scroll', onScroll, { passive: true })
+  onScroll()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', onScroll)
+  if (rafId) cancelAnimationFrame(rafId)
+  if (vitalInterval) clearInterval(vitalInterval)
+})
 </script>
 
 <template>
-  <div v-if="checking" class="min-h-screen flex items-center justify-center" style="background:#f8faff">
-    <div class="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin" style="border-color:#2daa8a;border-top-color:transparent" />
+  <!-- Custom cursor (desktop only) -->
+  <div class="cur-dot" :class="{ hover: cursorHover }" :style="`left:${cursorX}px;top:${cursorY}px`" />
+  <div class="cur-ring" :class="{ hover: cursorHover }" :style="`left:${ringX}px;top:${ringY}px`" />
+
+  <div v-if="checking" class="min-h-screen flex items-center justify-center bg-[#F2F0EA]">
+    <div class="w-6 h-6 rounded-full border border-[#2daa8a] border-t-transparent animate-spin" />
   </div>
 
-  <div v-else style="font-family:'Inter',sans-serif;color:#0f172a;background:#ffffff">
+  <div v-else class="site">
 
-    <!-- ── BARRA DE PROGRESSO DE SCROLL ────────────── -->
-    <div class="fixed top-0 left-0 right-0 z-[60]" style="height:3px;background:transparent">
-      <div
-        style="height:100%;background:linear-gradient(90deg,#1e4d9a,#2daa8a);transition:width 0.1s linear"
-        :style="{ width: scrollProgress + '%' }"
-      />
+    <!-- ── SCROLL PROGRESS ─── -->
+    <div class="fixed top-0 left-0 right-0 z-[60] h-[2px] pointer-events-none">
+      <div class="h-full bg-[#2daa8a] transition-[width_.1s_linear]" :style="`width:${scrollProgress}%`" />
     </div>
 
-    <!-- ── NAVBAR ─────────────────────────────────── -->
-    <nav
-      class="sticky top-0 z-50 transition-all duration-300"
-      :style="navScrolled
-        ? 'background:rgba(255,255,255,0.97);backdrop-filter:blur(16px);border-bottom:2px solid #e8eef8;box-shadow:0 2px 16px rgba(30,77,154,0.06)'
-        : 'background:rgba(255,255,255,0.85);backdrop-filter:blur(8px);border-bottom:2px solid transparent;box-shadow:none'"
-    >
-      <div
-        class="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between transition-all duration-300"
-        :style="navScrolled ? 'height:3.5rem' : 'height:4rem'"
-      >
-        <!-- Logo real -->
-        <a href="#">
-          <img
-            src="/logo.png"
-            alt="Central SóMedicos"
-            class="transition-all duration-300"
-            :style="navScrolled ? 'height:70px;width:auto;display:block' : 'height:90px;width:auto;display:block'"
-          />
-        </a>
-        <!-- Links desktop -->
-        <div class="hidden md:flex items-center gap-7 text-sm font-semibold" style="color:#475569">
-          <a href="#servicos"       class="hover:text-[#1e4d9a] transition-colors">Serviços</a>
-          <a href="#diferenciais"   class="hover:text-[#1e4d9a] transition-colors">Diferenciais</a>
-          <a href="#especialidades" class="hover:text-[#1e4d9a] transition-colors">Especialidades</a>
-          <a href="#onde-atuamos"   class="hover:text-[#1e4d9a] transition-colors">Onde Atuamos</a>
-          <a href="#contato"        class="hover:text-[#1e4d9a] transition-colors">Contato</a>
+    <!-- ══════════════════════════════════════════════════
+         HERO
+    ══════════════════════════════════════════════════ -->
+    <section class="s-hero">
+      <!-- Full-bleed video with parallax -->
+      <div class="hero-photo-wrap" :style="`transform:translateY(${parallaxY * 0.14}px)`">
+        <video
+          class="hero-photo"
+          src="/video-hero-teleconsulta.mp4"
+          poster="/foto-teleconsulta.jpg"
+          autoplay muted loop playsinline
+        />
+      </div>
+      <!-- Overlay -->
+      <div class="hero-ov" />
+
+      <!-- NAV -->
+      <nav class="hero-nav">
+        <img src="/logo.png" alt="Central SóMedicos" class="hero-logo" />
+        <div class="hero-nav-links">
+          <a href="#servicos">Serviços</a>
+          <a href="#especialidades">Especialidades</a>
+          <a href="#onde-atuamos">Onde Atuamos</a>
         </div>
-        <div class="hidden md:flex items-center gap-3">
-          <NuxtLink to="/auth/login" class="inline-flex items-center gap-1.5 px-5 py-2 text-sm font-bold rounded-xl transition-all hover:scale-[1.04] hover:shadow-lg" style="background:rgba(45,170,138,0.1);color:#2daa8a;border:1.5px solid rgba(45,170,138,0.4)">
-            <Zap :size="14" />
-            Plataforma
-          </NuxtLink>
-          <a href="#contato" class="px-5 py-2 text-sm font-bold rounded-xl text-white transition-all hover:opacity-90" style="background:linear-gradient(135deg,#1e4d9a,#2daa8a)">
-            Fale conosco
-          </a>
+        <div class="hero-nav-right">
+          <NuxtLink to="/auth/login" class="nav-btn-ghost">Plataforma</NuxtLink>
+          <a href="#contato" class="nav-btn-solid">Fale conosco</a>
         </div>
-        <button class="md:hidden p-2" @click="mobileMenu = !mobileMenu">
-          <component :is="mobileMenu ? XIcon : Menu" :size="22" style="color:#1e4d9a" />
+        <!-- Mobile burger -->
+        <button class="hero-burger md:hidden" @click="mobileMenu = !mobileMenu">
+          <span /><span /><span />
         </button>
+      </nav>
+
+      <!-- Mobile menu -->
+      <div v-if="mobileMenu" class="mobile-menu">
+        <a href="#servicos"       @click="mobileMenu=false">Serviços</a>
+        <a href="#especialidades" @click="mobileMenu=false">Especialidades</a>
+        <a href="#onde-atuamos"   @click="mobileMenu=false">Onde Atuamos</a>
+        <a href="#contato"        @click="mobileMenu=false" class="mobile-cta">Fale conosco →</a>
       </div>
-      <!-- Mobile -->
-      <div v-if="mobileMenu" class="md:hidden px-4 py-4 space-y-1 text-sm" style="border-top:1px solid #e8eef8;background:white">
-        <a v-for="[href, label] in [['#servicos','Serviços'],['#diferenciais','Diferenciais'],['#especialidades','Especialidades'],['#onde-atuamos','Onde Atuamos'],['#contato','Contato']]"
-           :key="href" :href="href" class="block py-2.5 font-semibold" style="color:#475569" @click="mobileMenu=false">
-          {{ label }}
-        </a>
-        <a href="#contato" class="block text-center py-3 rounded-xl font-bold text-white mt-2" style="background:linear-gradient(135deg,#1e4d9a,#2daa8a)" @click="mobileMenu=false">
-          Fale conosco
-        </a>
-      </div>
-    </nav>
 
-    <!-- ── HERO ───────────────────────────────────── -->
-    <section class="relative overflow-hidden" style="background:linear-gradient(135deg,#080f1e 0%,#0e2550 42%,#0b3326 100%);min-height:94vh;display:flex;align-items:center">
-      <!-- Orbs (parallax leve no scroll) -->
-      <div
-        class="glow-orb"
-        style="position:absolute;width:700px;height:700px;background:radial-gradient(circle,rgba(45,170,138,0.22) 0%,transparent 65%);top:-150px;right:-100px;pointer-events:none"
-        :style="{ transform: `translateY(${parallaxY * 0.15}px)` }"
-      />
-      <div
-        class="glow-orb"
-        style="position:absolute;width:500px;height:500px;background:radial-gradient(circle,rgba(93,150,250,0.2) 0%,transparent 65%);bottom:-100px;left:-50px;pointer-events:none;animation-delay:2s"
-        :style="{ transform: `translateY(${parallaxY * -0.1}px)` }"
-      />
-      <!-- Grid -->
-      <div style="position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,0.04) 1px,transparent 1px);background-size:30px 30px;pointer-events:none" />
-
-      <div class="relative w-full max-w-6xl mx-auto px-4 sm:px-6 py-24 lg:py-0 flex flex-col lg:flex-row items-center gap-16">
-        <!-- Texto -->
-        <div class="flex-1 text-center lg:text-left">
-          <!-- eyebrow label -->
-          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold mb-5 uppercase tracking-widest" style="background:rgba(255,255,255,0.07);color:rgba(255,255,255,0.45);border:1px solid rgba(255,255,255,0.1);letter-spacing:0.18em">
-            Serviço de Teleconsulta
-          </div>
-
-          <h1 class="font-extrabold tracking-tight mb-6" style="color:white;-webkit-text-fill-color:white">
-            <span class="hero-line block text-5xl sm:text-6xl lg:text-7xl leading-[1.0] mb-1"
-                  style="background:linear-gradient(90deg,#ffffff 0%,#c7f0e6 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">
-              Teleconsultas
-            </span>
-            <span class="hero-line hero-line-2 block text-2xl sm:text-3xl lg:text-4xl leading-[1.3] font-bold" style="color:rgba(255,255,255,0.85)">
-              com exame físico ao vivo.
-            </span>
-            <span class="hero-line hero-line-3 block text-lg sm:text-xl leading-[1.5] mt-3 font-medium" style="color:rgba(255,255,255,0.55)">
-              Médicos treinados, plataforma e telemetria Bluetooth — tudo incluso.
-            </span>
-          </h1>
-
-          <!-- badges de prova -->
-          <div class="flex flex-wrap gap-2 justify-center lg:justify-start mb-10">
-            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold badge-shine" style="background:rgba(45,170,138,0.13);color:#5debb9;border:1px solid rgba(45,170,138,0.22)">
-              <span class="w-1.5 h-1.5 rounded-full inline-block animate-pulse" style="background:#5debb9" />
-              Telemetria ao vivo
-            </span>
-            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold" style="background:rgba(93,149,255,0.12);color:#93c5fd;border:1px solid rgba(93,149,255,0.2)">
-              <span class="w-1.5 h-1.5 rounded-full inline-block" style="background:#93c5fd" />
-              Médicos inclusos
-            </span>
-            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold" style="background:rgba(180,142,255,0.12);color:#c4b5fd;border:1px solid rgba(180,142,255,0.2)">
-              <span class="w-1.5 h-1.5 rounded-full inline-block" style="background:#c4b5fd" />
-              Sem hardware para comprar
-            </span>
-          </div>
-
-          <p class="text-base leading-relaxed mb-10 max-w-xl mx-auto lg:mx-0" style="color:rgba(255,255,255,0.65)">
-            Os sinais vitais do paciente — pressão, SpO₂, glicemia, temperatura e mais — aparecem na tela do médico em tempo real, durante a videoconferência. Sem compras adicionais.
-          </p>
-          <div class="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
-            <a href="#contato"
-               class="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-bold text-white transition-all hover:scale-[1.03] btn-glow"
-               style="background:linear-gradient(135deg,#2daa8a,#1a6b56)">
-              Quero começar agora
-              <ArrowRight :size="18" />
-            </a>
-            <a href="#diferenciais"
-               class="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-semibold transition-all"
-               style="background:rgba(255,255,255,0.07);color:white;border:1px solid rgba(255,255,255,0.12)">
-              Ver diferenciais
-              <ChevronRight :size="16" />
-            </a>
-          </div>
-        </div>
-
-        <!-- Foto real + cards flutuantes -->
-        <div class="flex-1 flex justify-center lg:justify-end shrink-0">
-          <div class="relative w-full max-w-[380px] float-el">
-            <div class="rounded-3xl overflow-hidden shadow-2xl" style="border:1px solid rgba(255,255,255,0.15)">
-              <img
-                src="/foto-teleconsulta.jpg"
-                alt="Teleconsulta SóMedicos — paciente com médico na tela e enfermeira ao lado"
-                class="w-full h-auto block"
-                style="aspect-ratio:4/5;object-fit:cover"
-              />
-            </div>
-
-            <!-- Fila ao vivo flutuante -->
-            <div class="absolute -left-6 top-6 rounded-2xl p-4 shadow-2xl w-[210px]" style="background:rgba(15,23,42,0.85);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.12)">
-              <div class="flex items-center justify-between mb-3">
-                <div class="flex items-center gap-2">
-                  <span class="w-2 h-2 rounded-full animate-pulse inline-block" style="background:#2daa8a" />
-                  <span class="text-white text-xs font-semibold">Fila ao vivo</span>
-                </div>
-                <span class="text-[10px] px-2 py-0.5 rounded-full font-medium" style="background:rgba(45,170,138,0.18);color:#7de8d0">3</span>
-              </div>
-              <div class="space-y-1.5">
-                <div v-for="p in mockQueue.slice(0, 2)" :key="p.name" class="flex items-center gap-2 p-1.5 rounded-lg" style="background:rgba(255,255,255,0.05)">
-                  <div class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0" :style="`background:${p.c}30;color:${p.c === '#163c7d' ? '#93c5fd' : p.c === '#1e4d9a' ? '#93c5fd' : '#7de8d0'}`">{{ p.initials }}</div>
-                  <div class="flex-1 min-w-0">
-                    <p class="text-white text-[11px] font-semibold truncate">{{ p.name }}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Sinais vitais flutuante -->
-            <div class="absolute -right-5 -bottom-5 rounded-2xl p-4 shadow-2xl" style="background:white;min-width:155px">
-              <div class="flex items-center gap-1.5 mb-3">
-                <span class="w-1.5 h-1.5 rounded-full animate-pulse inline-block" style="background:#2daa8a" />
-                <p class="text-xs font-bold" style="color:#0f172a">Sinais Vitais</p>
-              </div>
-              <div class="space-y-1.5">
-                <div v-for="sv in [{l:'Pressão',v:'120/80',c:'#1e4d9a'},{l:'Pulso',v:'72 bpm',c:'#2daa8a'},{l:'SpO₂',v:'98%',c:'#2d62bc'},{l:'Glicemia',v:'95 mg/dL',c:'#d97706'}]" :key="sv.l" class="flex justify-between items-center">
-                  <span class="text-xs" style="color:#64748b">{{ sv.l }}</span>
-                  <span class="text-xs font-bold" :style="`color:${sv.c}`">{{ sv.v }}</span>
-                </div>
-              </div>
-              <div class="flex items-center gap-1.5 mt-3 pt-2.5" style="border-top:1px solid #f1f5f9">
-                <Bluetooth :size="11" style="color:#2daa8a" />
-                <span class="text-xs font-semibold" style="color:#2daa8a">Bluetooth ativo</span>
-              </div>
-            </div>
-          </div>
+      <!-- TITLE BLOCK (bottom-left) -->
+      <div class="hero-body" :style="`opacity:${heroOpacity};transform:translateY(${heroShift}px)`">
+        <p class="hero-eyebrow intro intro-1">TELECONSULTA · TELEMEDICINA · BRASIL</p>
+        <h1 class="hero-h1">
+          <span class="h1-line"><span class="h1-thin intro-line intro-2">CENTRAL</span></span>
+          <span class="h1-line"><span class="h1-black intro-line intro-3">SÓMEDICOS</span></span>
+          <span class="h1-line"><span class="h1-sub intro-line intro-4">COM EXAME<br>FÍSICO AO VIVO.</span></span>
+        </h1>
+        <div class="hero-actions intro intro-5">
+          <a href="#contato" class="btn-accent">Começar agora <ArrowRight :size="16" /></a>
+          <a href="#demo"    class="btn-ghost-light">Ver plataforma</a>
         </div>
       </div>
 
-      <div class="absolute bottom-0 left-0 right-0">
-        <svg viewBox="0 0 1440 70" preserveAspectRatio="none" style="width:100%;height:70px;display:block">
-          <path d="M0,70 C480,0 960,0 1440,70 L1440,70 L0,70 Z" fill="#ffffff"/>
-        </svg>
-      </div>
-    </section>
-
-    <!-- ── FOTO REAL ──────────────────────────────── -->
-    <section class="py-20 px-4 sm:px-6" style="background:#ffffff">
-      <div class="max-w-5xl mx-auto flex flex-col lg:flex-row items-center gap-12 reveal">
-        <!-- Imagem -->
-        <div class="flex-1 w-full">
-          <div class="relative rounded-3xl overflow-hidden shadow-2xl" style="border:1px solid #e8eef8">
-            <img
-              :src="'/foto-teleconsulta.jpg'"
-              alt="Teleconsulta SóMedicos — paciente com médico na tela e enfermeira ao lado"
-              class="w-full h-auto block"
-              style="object-fit:cover"
-            />
-            <!-- Badge flutuante -->
-            <div class="absolute bottom-4 left-4 right-4 rounded-2xl px-4 py-3 flex items-center gap-3" style="background:rgba(8,15,30,0.75);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,0.1)">
-              <span class="w-2 h-2 rounded-full shrink-0 animate-pulse inline-block" style="background:#2daa8a" />
-              <span class="text-xs font-semibold" style="color:rgba(255,255,255,0.9)">Teleconsulta com exame físico real — ao vivo, via Bluetooth</span>
-            </div>
-          </div>
-        </div>
-        <!-- Texto -->
-        <div class="flex-1 lg:pl-4">
-          <span class="inline-block text-xs font-bold px-3 py-1.5 rounded-full mb-4 uppercase tracking-wide" style="background:#e6f5f1;color:#1a6b56">Como funciona na prática</span>
-          <h2 class="text-3xl sm:text-4xl font-extrabold tracking-tight mb-5" style="color:#0b1120;line-height:1.15">
-            O médico vê os dados<br>
-            <span style="background:linear-gradient(90deg,#1e4d9a,#2daa8a);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">em tempo real, na tela.</span>
-          </h2>
-          <p class="text-base leading-relaxed mb-6" style="color:#475569">
-            A enfermeira coleta os sinais vitais com dispositivos Bluetooth — pressão, SpO₂, glicemia e mais — enquanto o médico acompanha tudo ao vivo na videoconferência. Sem fios, sem demora.
-          </p>
-          <ul class="space-y-3 mb-8">
-            <li v-for="item in [
-              'Pressão arterial, pulso e SpO₂ ao vivo',
-              'Médico treinado incluso no serviço',
-              'Receitas e atestados gerados automaticamente',
-              'Integração nativa com agenda do SUS',
-            ]" :key="item" class="flex items-start gap-3 text-sm font-medium" style="color:#0f172a">
-              <CheckCircle2 :size="17" class="mt-0.5 shrink-0" style="color:#2daa8a" />
-              {{ item }}
-            </li>
-          </ul>
-          <a href="#contato" class="inline-flex items-center gap-2 px-7 py-3.5 rounded-2xl font-bold text-white transition-all hover:opacity-90 hover:scale-[1.02]" style="background:linear-gradient(135deg,#1e4d9a,#2daa8a)">
-            Quero saber mais
-            <ArrowRight :size="16" />
-          </a>
-        </div>
-      </div>
-    </section>
-
-    <!-- ── NÚMEROS ─────────────────────────────────── -->
-    <section style="background:#ffffff;padding:0 1.5rem 4rem">
-      <div class="max-w-4xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div v-for="n in numbers" :key="n.value" class="text-center py-7 px-4 rounded-2xl reveal" style="background:#f8faff;border:1px solid #e8eef8">
-          <p class="text-3xl font-extrabold mb-1" style="background:linear-gradient(135deg,#1e4d9a,#2daa8a);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">{{ n.value }}</p>
-          <p class="text-xs font-medium" style="color:#64748b">{{ n.label }}</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- ── DIFERENCIAIS ──────────────────────────────── -->
-    <section id="diferenciais" class="py-24 px-4 sm:px-6 relative overflow-hidden" style="background:#f8faff">
-      <img
-        src="/bg-diferenciais.png"
-        alt=""
-        aria-hidden="true"
-        class="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
-        style="opacity:0.06;transform:scale(1.1)"
-      />
-      <div class="max-w-5xl mx-auto relative">
-        <div class="text-center mb-16 reveal">
-          <span class="inline-block text-xs font-bold px-3 py-1.5 rounded-full mb-4 uppercase tracking-wide" style="background:#e6f5f1;color:#1a6b56">Por que a Central SóMedicos?</span>
-          <h2 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold mb-4 tracking-tight leading-tight" style="color:#0b1120">
-            Médicos treinados.<br>
-            <span style="background:linear-gradient(90deg,#1e4d9a,#2daa8a);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">Telemetria ao vivo.</span><br>
-            Serviço completo.
-          </h2>
-          <p class="text-lg max-w-2xl mx-auto" style="color:#64748b">Um único serviço que inclui o corpo clínico, a plataforma e todos os dispositivos de telemetria Bluetooth — integrados e funcionando desde o primeiro dia.</p>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-14">
-          <div class="p-7 rounded-3xl reveal delay-1" style="background:linear-gradient(135deg,#1e4d9a,#163c7d);color:white">
-            <div class="w-11 h-11 rounded-2xl flex items-center justify-center mb-5" style="background:rgba(255,255,255,0.12)"><Users :size="22" style="color:white" /></div>
-            <h3 class="font-bold text-lg mb-2">Médicos inclusos</h3>
-            <p class="text-sm leading-relaxed" style="color:rgba(255,255,255,0.75)">Corpo clínico treinado em telemedicina com exame físico. Você não recruta, não treina, não gerencia.</p>
-          </div>
-          <div class="p-7 rounded-3xl reveal delay-2" style="background:linear-gradient(135deg,#2daa8a,#1a6b56);color:white">
-            <div class="w-11 h-11 rounded-2xl flex items-center justify-center mb-5" style="background:rgba(255,255,255,0.12)"><Zap :size="22" style="color:white" /></div>
-            <h3 class="font-bold text-lg mb-2">Operacional em 24h</h3>
-            <p class="text-sm leading-relaxed" style="color:rgba(255,255,255,0.75)">Nossa equipe configura tudo remotamente. Do primeiro contato ao primeiro atendimento em menos de um dia.</p>
-          </div>
-          <div class="p-7 rounded-3xl border reveal delay-3" style="border-color:#e2e8f4;background:white">
-            <div class="w-11 h-11 rounded-2xl flex items-center justify-center mb-5" style="background:#e8eef8"><Shield :size="22" style="color:#1e4d9a" /></div>
-            <h3 class="font-bold text-lg mb-2" style="color:#0b1120">Telemetria inclusa no serviço</h3>
-            <p class="text-sm leading-relaxed" style="color:#64748b">Não vendemos kit. Todo equipamento de telemetria Bluetooth para coleta de sinais vitais já está incluso — sem compra à parte.</p>
-          </div>
-        </div>
-
-        <!-- Tabela comparativa -->
-        <div class="rounded-3xl overflow-hidden border" style="border-color:#e2e8f4">
-          <div class="grid grid-cols-4 text-sm font-bold" style="background:#f0f4ff">
-            <div class="px-6 py-4" />
-            <div class="px-4 py-4 text-center" style="background:linear-gradient(135deg,#1e4d9a,#2daa8a)">
-              <span class="text-white text-xs font-bold">Central SóMedicos</span>
-            </div>
-            <div class="px-4 py-4 text-center text-xs" style="color:#94a3b8">Kit de hardware</div>
-            <div class="px-4 py-4 text-center text-xs" style="color:#94a3b8">Só software</div>
-          </div>
-          <div v-for="(row, i) in compare" :key="row.label"
-               class="grid grid-cols-4 text-sm border-t items-center"
-               :style="i % 2 === 0 ? 'border-color:#e8eef8;background:#ffffff' : 'border-color:#e8eef8;background:#fafbff'">
-            <div class="px-6 py-4 font-medium text-sm" style="color:#374151">{{ row.label }}</div>
-            <div class="px-4 py-4 flex justify-center">
-              <span v-if="row.nos" class="flex items-center justify-center w-7 h-7 rounded-full" style="background:#e6f5f1"><CheckCircle2 :size="16" style="color:#2daa8a" /></span>
-              <span v-else class="font-bold text-xl leading-none" style="color:#cbd5e1">—</span>
-            </div>
-            <div class="px-4 py-4 flex justify-center">
-              <span v-if="row.hardware" class="flex items-center justify-center w-7 h-7 rounded-full" style="background:#f1f5f9"><CheckCircle2 :size="16" style="color:#94a3b8" /></span>
-              <span v-else class="font-bold text-xl leading-none" style="color:#cbd5e1">—</span>
-            </div>
-            <div class="px-4 py-4 flex justify-center">
-              <span v-if="row.soSoftware" class="flex items-center justify-center w-7 h-7 rounded-full" style="background:#f1f5f9"><CheckCircle2 :size="16" style="color:#94a3b8" /></span>
-              <span v-else class="font-bold text-xl leading-none" style="color:#cbd5e1">—</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ── MODALIDADES DE INSTALAÇÃO ──────────────── -->
-    <section class="py-24 px-4 sm:px-6" style="background:#ffffff">
-      <div class="max-w-5xl mx-auto">
-        <div class="text-center mb-14">
-          <span class="inline-block text-xs font-bold px-3 py-1.5 rounded-full mb-4 uppercase tracking-wide" style="background:#e6f5f1;color:#1a6b56">Modalidades de implantação</span>
-          <h2 class="text-3xl sm:text-4xl font-extrabold mb-3 tracking-tight" style="color:#0b1120">Implantamos na sua unidade<br>ou levamos até o paciente</h2>
-          <p class="text-lg max-w-2xl mx-auto" style="color:#64748b">Estrutura fixa instalada no seu espaço ou atendimento itinerante — adaptamos o modelo ao seu contexto operacional.</p>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-
-          <!-- Fixa -->
-          <div class="group p-8 rounded-3xl border transition-all hover:-translate-y-1 hover:shadow-xl reveal" style="border-color:#dbeafe;background:#f0f7ff">
-            <div class="w-14 h-14 rounded-2xl flex items-center justify-center mb-6" style="background:linear-gradient(135deg,#1e4d9a,#163c7d)">
-              <Building2 :size="26" style="color:white" />
-            </div>
-            <div class="flex items-center gap-2 mb-3">
-              <h3 class="font-extrabold text-xl" style="color:#0b1120">Estrutura Fixa na Unidade</h3>
-              <span class="text-xs px-2 py-0.5 rounded-full font-bold" style="background:#dbeafe;color:#1e4d9a">Padrão</span>
-            </div>
-            <p class="text-sm leading-relaxed mb-6" style="color:#64748b">Nossa equipe instala toda a infraestrutura de teleconsulta diretamente na sua unidade — equipamentos de telemetria, plataforma configurada e médicos prontos para atender.</p>
-            <ul class="space-y-2.5">
-              <li v-for="t in ['Configuração completa no local','Treinamento da equipe administrativa','Sala de teleconsulta pronta para uso','Suporte técnico contínuo']" :key="t"
-                  class="flex items-center gap-2.5 text-sm font-medium" style="color:#1e4d9a">
-                <CheckCircle2 :size="16" style="color:#1e4d9a;flex-shrink:0" />
-                {{ t }}
-              </li>
-            </ul>
-          </div>
-
-          <!-- Itinerante -->
-          <div class="group p-8 rounded-3xl border transition-all hover:-translate-y-1 hover:shadow-xl reveal delay-2" style="border-color:#b2e8d8;background:#f0faf6">
-            <div class="w-14 h-14 rounded-2xl flex items-center justify-center mb-6" style="background:linear-gradient(135deg,#2daa8a,#1a6b56)">
-              <Truck :size="26" style="color:white" />
-            </div>
-            <div class="flex items-center gap-2 mb-3">
-              <h3 class="font-extrabold text-xl" style="color:#0b1120">Atendimento Itinerante</h3>
-              <span class="text-xs px-2 py-0.5 rounded-full font-bold" style="background:#e6f5f1;color:#1a6b56">Móvel</span>
-            </div>
-            <p class="text-sm leading-relaxed mb-6" style="color:#64748b">Levamos toda a estrutura até campanhas de saúde, municípios remotos ou locais sem infraestrutura fixa. Teleconsultas com exame físico ao vivo, onde quer que o paciente esteja.</p>
-            <ul class="space-y-2.5">
-              <li v-for="t in ['Equipamentos transportados pela nossa equipe','Funciona sem instalação permanente','Ideal para campanhas e mutirões','Feiras de saúde e áreas rurais']" :key="t"
-                  class="flex items-center gap-2.5 text-sm font-medium" style="color:#2daa8a">
-                <CheckCircle2 :size="16" style="color:#2daa8a;flex-shrink:0" />
-                {{ t }}
-              </li>
-            </ul>
-          </div>
-
-        </div>
-      </div>
-    </section>
-
-    <!-- ── SERVIÇOS (bento) ──────────────────────────── -->
-    <section id="servicos" class="py-24 px-4 sm:px-6" style="background:#ffffff">
-      <div class="max-w-6xl mx-auto">
-        <div class="text-center mb-14">
-          <span class="inline-block text-xs font-bold px-3 py-1.5 rounded-full mb-4 uppercase tracking-wide" style="background:#e8eef8;color:#1e4d9a">O que entregamos</span>
-          <h2 class="text-3xl sm:text-4xl font-extrabold mb-3 tracking-tight" style="color:#0b1120">Tudo que sua unidade precisa<br>para teleconsultar com excelência</h2>
-          <p class="text-lg max-w-2xl mx-auto" style="color:#64748b">Da infraestrutura digital ao médico na tela — um único fornecedor, uma única responsabilidade.</p>
-        </div>
-        <!-- Bento grid -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div class="lg:col-span-2 group p-8 rounded-3xl border transition-all hover:-translate-y-1 hover:shadow-xl reveal delay-1" style="border-color:#e2e8f4;background:#f8faff">
-            <div class="w-12 h-12 rounded-2xl flex items-center justify-center mb-5" style="background:#e8eef8"><Users :size="24" style="color:#1e4d9a" /></div>
-            <h3 class="font-bold text-xl mb-3" style="color:#0b1120">Médicos treinados e prontos para atender</h3>
-            <p class="text-sm leading-relaxed" style="color:#64748b">Fornecemos o corpo clínico especializado, já treinado em telemedicina com exame físico. Você não precisa contratar, treinar ou gerenciar equipe médica. Só receber os pacientes.</p>
-          </div>
-          <div class="group p-8 rounded-3xl transition-all hover:-translate-y-1 hover:shadow-xl reveal delay-2" style="background:linear-gradient(135deg,#1e4d9a,#163c7d)">
-            <div class="w-12 h-12 rounded-2xl flex items-center justify-center mb-5" style="background:rgba(255,255,255,0.12)"><Bluetooth :size="24" style="color:white" /></div>
-            <h3 class="font-bold text-xl mb-3 text-white">Sinais vitais<br>via Bluetooth</h3>
-            <p class="text-sm leading-relaxed" style="color:rgba(255,255,255,0.72)">Pressão, SpO₂, glicemia, temperatura e bioimpedância capturados sem fio durante a consulta remota.</p>
-          </div>
-          <div class="group p-8 rounded-3xl transition-all hover:-translate-y-1 hover:shadow-xl reveal delay-1" style="background:linear-gradient(135deg,#2daa8a,#1a6b56)">
-            <div class="w-12 h-12 rounded-2xl flex items-center justify-center mb-5" style="background:rgba(255,255,255,0.12)"><Activity :size="24" style="color:white" /></div>
-            <h3 class="font-bold text-xl mb-3 text-white">Fila, prontuário<br>e documentos</h3>
-            <p class="text-sm leading-relaxed" style="color:rgba(255,255,255,0.72)">Triagem, chamada, evolução, receitas e atestados — tudo no browser, sem instalar nada.</p>
-          </div>
-          <div class="lg:col-span-2 group p-8 rounded-3xl border transition-all hover:-translate-y-1 hover:shadow-xl" style="border-color:#e2e8f4;background:#f8faff">
-            <div class="w-12 h-12 rounded-2xl flex items-center justify-center mb-5" style="background:#e6f5f1"><Building2 :size="24" style="color:#2daa8a" /></div>
-            <h3 class="font-bold text-xl mb-3" style="color:#0b1120">Integração nativa com o SUS</h3>
-            <p class="text-sm leading-relaxed" style="color:#64748b">Importamos a agenda do SUS, cadastramos pacientes e gerenciamos os agendamentos — sem duplicidade, sem retrabalho. Especialmente indicado para UBS e Policlínicas públicas.</p>
-          </div>
-          <div class="group p-8 rounded-3xl border transition-all hover:-translate-y-1 hover:shadow-xl" style="border-color:#e2e8f4">
-            <div class="w-12 h-12 rounded-2xl flex items-center justify-center mb-5" style="background:#e8eef8"><Video :size="24" style="color:#1e4d9a" /></div>
-            <h3 class="font-bold text-base mb-2" style="color:#0b1120">Videoconferência integrada</h3>
-            <p class="text-sm leading-relaxed" style="color:#64748b">Consulta por vídeo segura com sinais vitais na mesma tela. Sem links externos.</p>
-          </div>
-          <div class="group p-8 rounded-3xl border transition-all hover:-translate-y-1 hover:shadow-xl" style="border-color:#e2e8f4">
-            <div class="w-12 h-12 rounded-2xl flex items-center justify-center mb-5" style="background:#e6f5f1"><FileText :size="24" style="color:#2daa8a" /></div>
-            <h3 class="font-bold text-base mb-2" style="color:#0b1120">Documentos automáticos</h3>
-            <p class="text-sm leading-relaxed" style="color:#64748b">Receitas, atestados e pedidos de exame em PDF com link seguro para o paciente.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ── TECNOLOGIA BT ──────────────────────────── -->
-    <section id="tecnologia" class="py-20 px-4 sm:px-6 relative overflow-hidden" style="background:linear-gradient(135deg,#0b1f40,#163c7d 50%,#1a5c4a)">
-      <div style="position:absolute;width:600px;height:600px;background:radial-gradient(circle,rgba(45,170,138,0.15) 0%,transparent 65%);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none" />
-      <div style="position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,0.03) 1px,transparent 1px);background-size:24px 24px;pointer-events:none" />
-
-      <div class="relative max-w-6xl mx-auto flex flex-col lg:flex-row items-center gap-14">
-        <!-- Grid dispositivos -->
-        <div class="flex-1 grid grid-cols-3 gap-3 max-w-sm mx-auto lg:mx-0">
-          <div v-for="d in [
-            { emoji:'🫀', label:'Pressão Arterial',   val:'120/80 mmHg', c:'#93c5fd' },
-            { emoji:'💧', label:'Saturação SpO₂',     val:'98%',         c:'#7de8d0' },
-            { emoji:'🌡️', label:'Temperatura',        val:'36.8°C',      c:'#fcd34d' },
-            { emoji:'⚖️', label:'Balança / IMC',      val:'74.2 kg',     c:'#a5b4fc' },
-            { emoji:'🩸', label:'Glicemia',           val:'95 mg/dL',    c:'#fca5a5' },
-            { emoji:'📊', label:'Bioimpedância',      val:'22% gordura', c:'#6ee7b7' },
-          ]" :key="d.label"
-             class="flex flex-col items-center text-center p-3.5 rounded-2xl"
-             style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1)">
-            <span class="text-3xl mb-2">{{ d.emoji }}</span>
-            <p class="text-xs font-bold leading-tight mb-1" :style="`color:${d.c}`">{{ d.val }}</p>
-            <p class="text-xs leading-tight" style="color:rgba(255,255,255,0.75)">{{ d.label }}</p>
-          </div>
-        </div>
-
-        <!-- Texto -->
-        <div class="flex-1 text-center lg:text-left">
-          <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold mb-5" style="background:rgba(45,170,138,0.18);color:#7de8d0;border:1px solid rgba(45,170,138,0.3)">
-            <Bluetooth :size="12" />
-            Protocolo aberto IEEE 11073
-          </div>
-          <h2 class="text-3xl sm:text-4xl font-extrabold mb-5 tracking-tight leading-tight" style="color:white;-webkit-text-fill-color:white">
-            Exame físico real<br>
-            <span style="background:linear-gradient(90deg,#7de8d0,#93c5fd);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">
-              durante a teleconsulta
-            </span>
-          </h2>
-          <p class="text-lg leading-relaxed mb-7" style="color:rgba(255,255,255,0.82)">
-            Nossa plataforma captura 6 tipos de sinais vitais via Bluetooth enquanto o médico conversa com o paciente. Os dados aparecem em tempo real na mesma tela — com a mesma confiabilidade de um consultório presencial.
-          </p>
-          <div class="space-y-3">
-            <div v-for="txt in [
-              'Todo equipamento de telemetria Bluetooth incluso no serviço',
-              'Compatível com os principais dispositivos médicos BT do mercado',
-              'Dados capturados e salvos automaticamente no prontruário',
-              'Sem compra de kit, sem contrato de hardware separado',
-            ]" :key="txt" class="flex items-start gap-3">
-              <CheckCircle2 :size="17" style="color:#2daa8a;flex-shrink:0;margin-top:2px" />
-              <span class="text-sm leading-relaxed" style="color:rgba(255,255,255,0.85)">{{ txt }}</span>
-            </div>
-          </div>
-        </div>
+      <!-- INFO TAG (bottom-right) -->
+      <div class="hero-tag" :style="`opacity:${heroOpacity}`">
+        <span class="tag-top intro intro-5">EM OPERAÇÃO</span>
+        <span class="tag-bottom intro intro-5">CEARÁ · BRASIL</span>
+        <span class="hero-scroll-hint intro intro-5"><span class="hint-line" />SCROLL</span>
       </div>
 
-      <div class="absolute bottom-0 left-0 right-0">
-        <svg viewBox="0 0 1440 70" preserveAspectRatio="none" style="width:100%;height:70px;display:block">
-          <path d="M0,70 C480,0 960,0 1440,70 L1440,70 L0,70 Z" fill="#ffffff"/>
-        </svg>
-      </div>
-    </section>
-
-    <!-- ── ESPECIALIDADES (chips) ──────────────────── -->
-    <section id="especialidades" class="py-24 px-4 sm:px-6" style="background:#ffffff">
-      <div class="max-w-4xl mx-auto text-center reveal">
-        <span class="inline-block text-xs font-bold px-3 py-1.5 rounded-full mb-4 uppercase tracking-wide" style="background:#e8eef8;color:#1e4d9a">Especialidades</span>
-        <h2 class="text-3xl sm:text-4xl font-extrabold mb-4 tracking-tight" style="color:#0b1120">Corpo clínico treinado<br>em telemedicina com exame físico</h2>
-        <p class="text-lg max-w-xl mx-auto mb-12" style="color:#64748b">Médicos capacitados para atender remotamente com qualidade de consultório presencial.</p>
-        <div class="flex flex-wrap justify-center gap-3">
-          <div v-for="(sp, i) in specialties" :key="sp.label"
-               class="inline-flex items-center gap-2.5 px-5 py-3 rounded-2xl border font-semibold text-sm transition-all hover:-translate-y-0.5 hover:shadow-md reveal"
-               :class="`delay-${(i % 4) + 1}`"
-               style="border-color:#e2e8f4;background:#f8faff">
-            <div class="w-7 h-7 rounded-xl flex items-center justify-center" style="background:linear-gradient(135deg,#e8eef8,#e6f5f1)">
-              <component :is="sp.icon" :size="15" style="color:#1e4d9a" />
-            </div>
-            <span style="color:#374151">{{ sp.label }}</span>
-          </div>
-          <div class="inline-flex items-center gap-2 px-5 py-3 rounded-2xl font-semibold text-sm" style="background:#f1f5f9;color:#94a3b8;border:1px dashed #cbd5e1">+ muito mais</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ── COMO FUNCIONA ──────────────────────────── -->
-    <section class="py-24 px-4 sm:px-6" style="background:#f8faff">
-      <div class="max-w-5xl mx-auto">
-        <div class="text-center mb-16 reveal">
-          <span class="inline-block text-xs font-bold px-3 py-1.5 rounded-full mb-4 uppercase tracking-wide" style="background:#e6f5f1;color:#1a6b56">Como funciona</span>
-          <h2 class="text-3xl sm:text-4xl font-extrabold mb-3 tracking-tight" style="color:#0b1120">Do contato ao primeiro atendimento<br>em menos de um dia</h2>
-          <p class="text-lg max-w-xl mx-auto" style="color:#64748b">Nossa equipe cuida de todo o setup — você só precisa abrir as portas.</p>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div v-for="(step, idx) in steps" :key="step.n"
-               class="relative bg-white rounded-3xl overflow-hidden border text-center group hover:-translate-y-1 transition-all hover:shadow-xl reveal"
-               :class="`delay-${idx + 1}`"
-               style="border-color:#e2e8f4">
-            <div class="overflow-hidden" style="background:linear-gradient(135deg,#f0f7ff,#eafaf5)">
-              <img :src="step.img" :alt="step.title" class="w-full h-40 object-cover transition-transform duration-500 group-hover:scale-110" />
-            </div>
-            <div class="p-8 pt-6">
-              <div class="inline-flex items-center justify-center w-10 h-10 rounded-xl mb-4 text-sm font-black" style="background:linear-gradient(135deg,#1e4d9a,#2daa8a);color:white">{{ step.n }}</div>
-              <h3 class="text-base font-bold mb-2.5" style="color:#0b1120">{{ step.title }}</h3>
-              <p class="text-sm leading-relaxed" style="color:#64748b">{{ step.desc }}</p>
-            </div>
-            <div v-if="idx < 2" class="hidden md:flex absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full items-center justify-center z-10" style="background:#e8eef8">
-              <ChevronRight :size="14" style="color:#1e4d9a" />
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ── ONDE ATUAMOS ───────────────────────────── -->
-    <section id="onde-atuamos" class="py-24 px-4 sm:px-6" style="background:#ffffff">
-      <div class="max-w-5xl mx-auto text-center">
-        <div class="reveal">
-          <span class="inline-block text-xs font-bold px-3 py-1.5 rounded-full mb-4 uppercase tracking-wide" style="background:#e8eef8;color:#1e4d9a">Onde atuamos</span>
-          <h2 class="text-3xl sm:text-4xl font-extrabold mb-4 tracking-tight" style="color:#0b1120">Instalamos e operamos<br>onde você precisar</h2>
-          <p class="text-lg max-w-2xl mx-auto mb-12" style="color:#64748b">Estrutura fixa na sua unidade ou atendimento itinerante — adaptamos o serviço ao seu modelo de operarção.</p>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          <div v-for="(local, i) in where" :key="local.title"
-               class="rounded-3xl border text-left overflow-hidden transition-all hover:-translate-y-1 hover:shadow-lg reveal group"
-               :class="`delay-${(i % 4) + 1}`"
-               style="border-color:#e2e8f4">
-            <div class="overflow-hidden" style="background:linear-gradient(135deg,#f0f7ff,#eafaf5)">
-              <img :src="local.img" :alt="local.title" class="w-full h-32 object-cover transition-transform duration-500 group-hover:scale-110" />
-            </div>
-            <div class="p-6">
-              <div class="w-10 h-10 rounded-xl flex items-center justify-center mb-4 -mt-10 relative shadow-md" :style="`background:${local.bg}`">
-                <component :is="local.icon" :size="18" :style="`color:${local.c}`" />
-              </div>
-              <h3 class="font-bold text-base mb-2" style="color:#0b1120">{{ local.title }}</h3>
-              <p class="text-sm leading-relaxed" style="color:#64748b">{{ local.desc }}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ── NOSSA EQUIPE ───────────────────────────── -->
-    <section id="equipe" class="py-24 px-4 sm:px-6" style="background:#f8faff">
-      <div class="max-w-5xl mx-auto text-center reveal">
-        <span class="inline-block text-xs font-bold px-3 py-1.5 rounded-full mb-4 uppercase tracking-wide" style="background:#e6f5f1;color:#1a6b56">Nossa Equipe</span>
-        <h2 class="text-3xl sm:text-4xl font-extrabold mb-4 tracking-tight" style="color:#0b1120">Médicos que fazem a diferença</h2>
-        <p class="text-lg max-w-xl mx-auto mb-12" style="color:#64748b">Profissionais experientes, com sólida formação em Atenção Primária e Telemedicina.</p>
-
-        <div class="flex justify-center">
-          <div class="bg-white rounded-3xl border p-6 sm:p-8 flex flex-col sm:flex-row items-center gap-6 text-left max-w-xl transition-all hover:shadow-xl hover:-translate-y-1" style="border-color:#e2e8f4">
-            <img
-              src="/equipe-alex-fernandes.jpg"
-              alt="Dr. Alex Fernandes"
-              class="w-28 h-28 sm:w-32 sm:h-32 rounded-2xl object-cover flex-shrink-0"
-              style="border:2px solid #e2e8f4"
-            />
-            <div>
-              <h3 class="text-lg font-bold" style="color:#0b1120">Alex Fernandes</h3>
-              <p class="text-xs font-semibold mb-2" style="color:#1a6b56">CRM/CE 19594</p>
-              <p class="text-sm leading-relaxed" style="color:#64748b">
-                Médico formado pela FAMENE em João Pessoa/PB há 6 anos, atualmente cursando pós-graduação em Psiquiatria pela USJT.
-                Possui experiência sólida em Atenção Primária e Secundária, com foco em Saúde da Família e Comunidade,
-                além de atuar em Telemedicina e Psiquiatria.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ── CONTATO ────────────────────────────────── -->
-    <section id="contato" class="py-28 px-4 sm:px-6 relative overflow-hidden" style="background:linear-gradient(135deg,#080f1e 0%,#0e2550 45%,#0b3326 100%)">
-      <img
-        src="/bg-contato.png"
-        alt=""
-        aria-hidden="true"
-        class="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
-        style="opacity:0.35;mix-blend-mode:screen"
-      />
-      <div style="position:absolute;width:600px;height:600px;background:radial-gradient(circle,rgba(45,170,138,0.2) 0%,transparent 65%);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none" />
-      <div class="relative max-w-3xl mx-auto text-center reveal">
-        <!-- Logo no CTA -->
-        <img src="/logo.png" alt="Central SóMedicos" style="height:90px;width:auto;margin:0 auto 2rem;filter:brightness(0) invert(1);opacity:0.9" />
-        <h2 class="text-3xl sm:text-4xl font-extrabold text-white mb-5 tracking-tight">
-          Pronto para transformar<br>
-          <span style="background:linear-gradient(90deg,#5debb9,#7eb4ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">
-            o atendimento da sua unidade?
+      <!-- MARQUEE (very bottom) -->
+      <div class="hero-marquee">
+        <div class="mq-track">
+          <span class="mq-inner" v-for="_ in 3" :key="_">
+            TELEMEDICINA &nbsp;·&nbsp; EXAME FÍSICO AO VIVO &nbsp;·&nbsp; BLUETOOTH &nbsp;·&nbsp;
+            PRONTUÁRIO DIGITAL &nbsp;·&nbsp; MÉDICOS INCLUSOS &nbsp;·&nbsp;
+            IMPLANTAÇÃO &lt; 24H &nbsp;·&nbsp; FORTALEZA, CE &nbsp;·&nbsp;
           </span>
-        </h2>
-        <p class="text-lg mb-12" style="color:rgba(255,255,255,0.78)">
-          Fale com nossa equipe. Sem compromisso, sem burocracia. Apresentamos como a Central SóMedicos se adapta ao seu fluxo — e estamos operacionais em menos de 24h.
-        </p>
-        <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <a href="mailto:contato@centralsomedicos.com.br"
-             class="inline-flex items-center gap-2.5 px-8 py-4 rounded-2xl font-bold text-white transition-all hover:scale-[1.03] shadow-xl"
-             style="background:linear-gradient(135deg,#2daa8a,#1a6b56)">
-            <Mail :size="18" />
-            contato@centralsomedicos.com.br
-          </a>
-          <a href="https://wa.me/5585984050068"
-             class="inline-flex items-center gap-2.5 px-8 py-4 rounded-2xl font-semibold transition-all"
-             style="background:rgba(255,255,255,0.08);color:white;border:1px solid rgba(255,255,255,0.15)">
-            <Phone :size="18" />
-            (85) 98405-0068
-          </a>
         </div>
-        <p class="mt-8 text-sm" style="color:rgba(255,255,255,0.5)">
-          Suporte das 8h às 18h · Segunda a Sábado
-        </p>
       </div>
     </section>
 
-    <!-- ── BOTÃO VOLTAR AO TOPO ────────────────────── -->
-    <Transition name="fade-up">
+    <!-- ══════════════════════════════════════════════════
+         STATS STRIP
+    ══════════════════════════════════════════════════ -->
+    <section class="s-stats">
+      <div class="stats-inner">
+        <div v-for="(n, i) in numbers" :key="n.value" class="stat-item reveal" :class="`delay-${i+1}`">
+          <div class="stat-num">{{ displayNums[i] }}<span class="stat-suffix">{{ n.suffix }}</span></div>
+          <div class="stat-label">{{ n.label }}</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════
+         STATEMENT
+    ══════════════════════════════════════════════════ -->
+    <section class="s-statement" ref="statementEl">
+      <div class="statement-pin">
+        <div class="statement-bg" aria-hidden="true">
+          <img
+            class="st-doctor"
+            src="/medico-cutout.png"
+            alt=""
+            :style="`transform:translateY(${statementProgress * -24}px)`"
+          />
+          <div class="st-orb st-orb-a" :style="`transform:translate(${statementProgress * -60}px,${statementProgress * 40}px) scale(${1 + statementProgress * 0.25})`" />
+          <div class="st-orb st-orb-b" :style="`transform:translate(${statementProgress * 50}px,${statementProgress * -30}px) scale(${1 + statementProgress * 0.18})`" />
+          <div class="st-grid" :style="`opacity:${0.15 + statementProgress * 0.2}`" />
+        </div>
+        <div class="statement-inner">
+          <p class="section-eyebrow reveal">O QUE FAZEMOS</p>
+          <p class="statement-text">
+            <span
+              v-for="(w, i) in statementWords"
+              :key="i"
+              class="st-w"
+              :class="{ on: i < wordsOn }"
+            >{{ w + ' ' }}</span>
+          </p>
+          <a href="#contato" class="link-arrow reveal">Fale com nossa equipe <ArrowRight :size="14" /></a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════
+         SERVICES  id="servicos"
+    ══════════════════════════════════════════════════ -->
+    <section id="servicos" class="s-features">
+      <div class="features-grid">
+        <!-- Left col -->
+        <div class="features-left reveal-l">
+          <p class="section-eyebrow">NOSSOS SERVIÇOS</p>
+          <p class="features-headline">Tudo que<br>sua unidade<br>precisa.</p>
+          <video
+            class="features-photo"
+            src="/video-dispositivo-bt.mp4"
+            poster="/foto-teleconsulta.jpg"
+            autoplay muted loop playsinline
+          />
+        </div>
+        <!-- Right col -->
+        <div class="features-right">
+          <div
+            v-for="(f, i) in featureList"
+            :key="f.title"
+            class="feat-row reveal"
+            :class="`delay-${i + 1}`"
+          >
+            <span class="feat-n">0{{ i + 1 }}</span>
+            <div class="feat-body">
+              <p class="feat-title">{{ f.title }}</p>
+              <p class="feat-desc">{{ f.desc }}</p>
+            </div>
+            <CheckCircle2 :size="16" class="feat-check" />
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════
+         PLATFORM DEMO  id="demo"
+    ══════════════════════════════════════════════════ -->
+    <section id="demo" class="s-demo">
+      <div class="demo-header reveal">
+        <p class="section-eyebrow light">PLATAFORMA EM AÇÃO</p>
+        <h2 class="demo-h2">
+          Uma teleconsulta<br>com exame físico<br>em tempo real.
+        </h2>
+        <p class="demo-sub">O médico conduz a consulta por vídeo enquanto a enfermeira coleta sinais vitais via Bluetooth. Tudo aparece na mesma tela.</p>
+      </div>
+
+      <!-- App mockup (3D tilt scrubbed to scroll) -->
+      <div class="demo-persp" ref="demoEl">
+      <div
+        class="demo-window"
+        :style="`opacity:${demoOpacity};transform:rotateX(${demoTiltX}deg) scale(${demoScale})`"
+      >
+        <!-- Title bar -->
+        <div class="dw-bar">
+          <span class="dw-dot red" /><span class="dw-dot yellow" /><span class="dw-dot green" />
+          <span class="dw-url">app.centralsomedicos.com.br/medico/consulta</span>
+          <span class="dw-live"><span class="dw-blink" />Ao vivo</span>
+        </div>
+        <!-- Body -->
+        <div class="dw-body">
+          <!-- Video feed (2/3) -->
+          <div class="dw-video">
+            <div class="dw-patient-bg">
+              <div class="dw-avatar" />
+              <span class="dw-name-tag">Maria Aparecida · Paciente</span>
+            </div>
+            <div class="dw-rec"><span class="dw-rec-dot" />REC 00:08:24</div>
+            <div class="dw-self">
+              <div class="dw-self-av" />
+              <span class="dw-self-name">Dr. Alex F.</span>
+            </div>
+            <!-- Controls -->
+            <div class="dw-controls">
+              <button class="dw-ctrl">🎙</button>
+              <button class="dw-ctrl">📷</button>
+              <button class="dw-ctrl end"><Phone :size="15" style="transform:rotate(135deg)" /></button>
+              <button class="dw-ctrl">📋</button>
+            </div>
+          </div>
+          <!-- Sidebar (1/3) -->
+          <div class="dw-sidebar">
+            <div class="dw-vitals">
+              <div class="dw-vitals-hdr">
+                <Bluetooth :size="11" /><span>Sinais Vitais · Ao Vivo</span>
+                <span class="dw-bt-tag">BT</span>
+              </div>
+              <div v-for="v in liveVitals" :key="v.l" class="dw-vital-row">
+                <span class="dw-vl">{{ v.l }}</span>
+                <span class="dw-vv">{{ v.v }} <span class="dw-vu">{{ v.unit }}</span></span>
+              </div>
+              <!-- ECG -->
+              <div class="dw-ecg">
+                <svg viewBox="0 0 200 28" preserveAspectRatio="none" class="dw-ecg-svg">
+                  <polyline points="0,14 20,14 28,6 36,22 44,14 60,14 68,3 76,25 80,14 96,14 104,6 112,22 120,14 136,14 144,3 152,25 156,14 172,14 180,6 188,22 200,14" fill="none" stroke="#2daa8a" stroke-width="1.2" />
+                </svg>
+              </div>
+            </div>
+            <div class="dw-queue">
+              <p class="dw-q-hdr">Fila de Espera</p>
+              <div v-for="p in mockQueue" :key="p.name" class="dw-q-row">
+                <span class="dw-q-av">{{ p.initials }}</span>
+                <div class="dw-q-info">
+                  <span class="dw-q-name">{{ p.name }}</span>
+                  <span class="dw-q-status">{{ p.status }}</span>
+                </div>
+                <span class="dw-q-badge">{{ p.badge }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════
+         SPECIALTIES  id="especialidades"
+    ══════════════════════════════════════════════════ -->
+    <section id="especialidades" class="s-specs">
+      <div class="specs-inner">
+        <p class="section-eyebrow reveal">ESPECIALIDADES</p>
+        <h2 class="specs-h2 reveal">Corpo clínico<br>treinado.</h2>
+        <div class="specs-chips reveal">
+          <span v-for="sp in specialties" :key="sp.label" class="spec-chip">
+            <component :is="sp.icon" :size="13" />
+            {{ sp.label }}
+          </span>
+          <span class="spec-chip ghost">+ muito mais</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════
+         HOW IT WORKS (dark)
+    ══════════════════════════════════════════════════ -->
+    <section class="s-steps">
+      <div class="steps-hdr reveal">
+        <p class="section-eyebrow light">COMO FUNCIONA</p>
+        <h2 class="steps-h2">Do contato ao<br>primeiro atendimento<br>em menos de um dia.</h2>
+      </div>
+      <div class="steps-list">
+        <div
+          v-for="(s, i) in steps"
+          :key="s.n"
+          class="step reveal"
+          :class="i === 0 ? 'reveal-l' : i === 2 ? 'reveal-r' : 'reveal'"
+          :style="`--delay:${i * 0.12}s`"
+        >
+          <div class="step-img-wrap">
+            <video
+              :src="s.video"
+              class="step-img"
+              autoplay muted loop playsinline
+            />
+          </div>
+          <div class="step-body">
+            <span class="step-n">{{ s.n }}</span>
+            <p class="step-title">{{ s.title }}</p>
+            <p class="step-desc">{{ s.desc }}</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════
+         WHERE  id="onde-atuamos"
+    ══════════════════════════════════════════════════ -->
+    <section id="onde-atuamos" class="s-where">
+      <div class="where-banner reveal">
+        <video
+          class="where-banner-video"
+          src="/video-onde-atuamos.mp4"
+          autoplay muted loop playsinline
+        />
+        <div class="where-banner-ov" />
+        <div class="where-hdr">
+          <p class="section-eyebrow light">ONDE ATUAMOS</p>
+          <h2 class="where-h2 light">Instalamos onde<br>você precisar.</h2>
+        </div>
+      </div>
+      <div class="where-grid">
+        <div
+          v-for="(w, i) in where"
+          :key="w.title"
+          class="where-card reveal"
+          :class="i < 2 ? 'reveal-l' : 'reveal-r'"
+          :style="`--delay:${i * 0.1}s`"
+        >
+          <div class="where-img-wrap">
+            <img :src="w.img" :alt="w.title" class="where-img" />
+            <span class="where-tag">{{ w.tag }}</span>
+          </div>
+          <p class="where-title">{{ w.title }}</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════
+         TEAM
+    ══════════════════════════════════════════════════ -->
+    <section class="s-team">
+      <div class="team-inner reveal">
+        <p class="section-eyebrow">NOSSA EQUIPE</p>
+        <div class="team-card">
+          <img src="/equipe-alex-fernandes.jpg" alt="Dr. Alex Fernandes" class="team-photo" />
+          <div class="team-bio">
+            <p class="team-name">Alex Fernandes</p>
+            <p class="team-crm">CRM/CE 19594</p>
+            <p class="team-text">
+              Médico formado pela FAMENE, com experiência sólida em Atenção Primária e Secundária,
+              foco em Saúde da Família e Comunidade, Telemedicina e Psiquiatria.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════
+         CONTACT / CTA  id="contato"
+    ══════════════════════════════════════════════════ -->
+    <section id="contato" class="s-cta" ref="ctaEl">
+      <div class="cta-inner reveal">
+        <p class="section-eyebrow light">FALE CONOSCO</p>
+        <h2 class="cta-h2">
+          Pronto para<br>transformar o<br>atendimento?
+        </h2>
+        <p class="cta-sub">Sem compromisso, sem burocracia. Operacionais em menos de 24h.</p>
+        <div class="cta-actions">
+          <a href="mailto:contato@centralsomedicos.com.br" class="btn-accent">
+            contato@centralsomedicos.com.br <ArrowRight :size="16" />
+          </a>
+          <a href="https://wa.me/5585984050068" class="btn-ghost-light">
+            WhatsApp · (85) 98405-0068
+          </a>
+        </div>
+        <p class="cta-hours">Suporte das 8h às 18h · Segunda a Sábado</p>
+      </div>
+      <!-- big decorative text (drifts with scroll) -->
+      <p class="cta-bg-text" aria-hidden="true" :style="`transform:translateX(${-ctaBgShift}px)`">CENTRAL<br>SÓMEDICOS</p>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════
+         FOOTER
+    ══════════════════════════════════════════════════ -->
+    <footer class="s-footer">
+      <div class="footer-top">
+        <img src="/logo.png" alt="Central SóMedicos" class="footer-logo" />
+        <nav class="footer-nav">
+          <a href="#servicos">Serviços</a>
+          <a href="#especialidades">Especialidades</a>
+          <a href="#onde-atuamos">Onde Atuamos</a>
+          <a href="#contato">Contato</a>
+          <NuxtLink to="/auth/login">Plataforma</NuxtLink>
+        </nav>
+        <div class="footer-contact">
+          <a href="tel:+5585984050068">(85) 98405-0068</a>
+          <span>Av. Ministro José Américo, 326 · Fortaleza/CE</span>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>© {{ new Date().getFullYear() }} Central SóMedicos · CNPJ 15.105.657/0001-90</span>
+        <div class="footer-legal">
+          <a href="#">Privacidade</a>
+          <a href="#">Termos</a>
+        </div>
+      </div>
+    </footer>
+
+    <!-- ── WhatsApp float ── -->
+    <a
+      href="https://wa.me/5585984050068"
+      target="_blank"
+      rel="noopener"
+      class="wa-float"
+      aria-label="WhatsApp"
+    >
+      <MessageCircle :size="22" fill="white" />
+    </a>
+
+    <!-- ── Back to top ── -->
+    <Transition name="bt">
       <button
         v-if="showBackToTop"
-        type="button"
-        class="fixed bottom-6 right-6 z-50 w-12 h-12 rounded-2xl flex items-center justify-center transition-all hover:scale-110 hover:shadow-xl"
-        style="background:linear-gradient(135deg,#1e4d9a,#2daa8a);box-shadow:0 4px 20px rgba(30,77,154,0.35)"
+        class="btt"
         aria-label="Voltar ao topo"
         @click="scrollToTop"
       >
-        <ChevronRight :size="20" style="color:white;transform:rotate(-90deg)" />
+        <ChevronRight :size="18" style="transform:rotate(-90deg)" />
       </button>
     </Transition>
-
-    <!-- ── FOOTER ──────────────────────────────────── -->
-    <footer class="pt-14 pb-8 px-4 sm:px-6" style="background:#06101f;border-top:1px solid rgba(255,255,255,0.06)">
-      <div class="max-w-6xl mx-auto">
-        <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-8 pb-10" style="border-bottom:1px solid rgba(255,255,255,0.08)">
-          <div class="max-w-xs">
-            <img src="/logo.png" alt="Central SóMedicos" style="height:56px;width:auto;filter:brightness(0) invert(1);opacity:0.85" />
-            <p class="text-sm mt-4 leading-relaxed" style="color:rgba(255,255,255,0.5)">
-              Plataforma de telemedicina que leva atendimento médico com exame físico ao vivo para unidades de saúde, empresas e clínicas.
-            </p>
-            <div class="flex gap-3 mt-5">
-              <a href="https://www.facebook.com" target="_blank" rel="noopener"
-                 class="w-9 h-9 rounded-full flex items-center justify-center transition-colors"
-                 style="background:rgba(255,255,255,0.06)" aria-label="Facebook">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="rgba(255,255,255,0.7)"><path d="M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V15H8v-3h2V9.5C10 7.57 11.57 6 13.5 6H16v3h-2c-.55 0-1 .45-1 1v2h3v3h-3v6.95c5.05-.5 9-4.76 9-9.95Z"/></svg>
-              </a>
-              <a href="https://www.instagram.com" target="_blank" rel="noopener"
-                 class="w-9 h-9 rounded-full flex items-center justify-center transition-colors"
-                 style="background:rgba(255,255,255,0.06)" aria-label="Instagram">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>
-              </a>
-              <a href="https://wa.me/5585984050068" target="_blank" rel="noopener"
-                 class="w-9 h-9 rounded-full flex items-center justify-center transition-colors"
-                 style="background:rgba(255,255,255,0.06)" aria-label="WhatsApp">
-                <Phone :size="15" style="color:rgba(255,255,255,0.7)" />
-              </a>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-2 sm:grid-cols-3 gap-8 text-sm">
-            <div>
-              <p class="font-bold mb-3 text-white">Institucional</p>
-              <div class="flex flex-col gap-2" style="color:rgba(255,255,255,0.55)">
-                <a href="#servicos" class="hover:text-white transition-colors">Serviços</a>
-                <a href="#diferenciais" class="hover:text-white transition-colors">Diferenciais</a>
-                <a href="#especialidades" class="hover:text-white transition-colors">Especialidades</a>
-                <a href="#onde-atuamos" class="hover:text-white transition-colors">Onde Atuamos</a>
-              </div>
-            </div>
-            <div>
-              <p class="font-bold mb-3 text-white">Acesso</p>
-              <div class="flex flex-col gap-2" style="color:rgba(255,255,255,0.55)">
-                <a href="#contato" class="hover:text-white transition-colors">Fale conosco</a>
-                <NuxtLink to="/auth/login" class="hover:text-white transition-colors">Plataforma</NuxtLink>
-              </div>
-            </div>
-            <div class="col-span-2 sm:col-span-1">
-              <p class="font-bold mb-3 text-white">Contato</p>
-              <div class="flex flex-col gap-2" style="color:rgba(255,255,255,0.55)">
-                <a href="tel:+5585984050068" class="hover:text-white transition-colors flex items-start gap-2">
-                  <Phone :size="14" class="mt-0.5 flex-shrink-0" />
-                  (85) 98405-0068
-                </a>
-                <div class="flex items-start gap-2">
-                  <MapPin :size="14" class="mt-0.5 flex-shrink-0" />
-                  <span>Av. Ministro José Américo, 326 · Cambeba · Fortaleza/CE</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs" style="color:rgba(255,255,255,0.4)">
-          <p class="text-center sm:text-left">
-            CNPJ 15.105.657/0001-90 · Responsável Técnico: Dr. Francimário Gomes de Oliveira · CRM/CE 14940
-          </p>
-          <div class="flex gap-5">
-            <a href="#" class="hover:text-white transition-colors">Política de Privacidade</a>
-            <a href="#" class="hover:text-white transition-colors">Termos de Uso</a>
-          </div>
-        </div>
-        <p class="pt-4 text-center text-xs" style="color:rgba(255,255,255,0.35)">
-          © {{ new Date().getFullYear() }} Central SóMedicos · Uma nova visão da saúde · Todos os direitos reservados
-        </p>
-      </div>
-    </footer>
 
   </div>
 </template>
 
-<style scoped>
-/* Combo de fontes: DM Sans nos títulos (mais personalidade), Inter no corpo (leitura) */
-h1, h2 {
-  font-family: 'DM Sans', 'Inter', sans-serif;
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0);     }
-  50%       { transform: translateY(-14px); }
-}
-@keyframes glow-pulse {
-  0%, 100% { opacity: 0.5; }
-  50%       { opacity: 1;   }
-}
-@keyframes btn-glow-pulse {
-  0%, 100% { box-shadow: 0 4px 24px rgba(45,170,138,0.4),  0 2px 8px  rgba(45,170,138,0.2); }
-  50%       { box-shadow: 0 4px 52px rgba(45,170,138,0.85), 0 0 90px  rgba(45,170,138,0.3); }
-}
-@keyframes badge-shimmer {
-  0%   { background-position: -300% center; }
-  100% { background-position:  300% center; }
-}
-@keyframes ticker-scroll {
-  0%   { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
-}
-@keyframes hero-fade-up {
-  from { opacity: 0; transform: translateY(28px); }
-  to   { opacity: 1; transform: none; }
-}
-
-.float-el    { animation: float 5.5s ease-in-out infinite; }
-.glow-orb    { animation: glow-pulse 4s ease-in-out infinite; }
-.btn-glow    { animation: btn-glow-pulse 2.6s ease-in-out infinite; }
-.badge-shine {
-  background-image: linear-gradient(90deg,
-    rgba(45,170,138,0.13) 0%,
-    rgba(93,235,185,0.25) 40%,
-    rgba(45,170,138,0.13) 80%);
-  background-size: 300% auto;
-  animation: badge-shimmer 3.5s linear infinite;
-}
-
-/* Hero line stagger */
-.hero-line       { animation: hero-fade-up 0.7s cubic-bezier(.22,1,.36,1) both; animation-delay: 0.15s; }
-.hero-line-2     { animation-delay: 0.32s; }
-.hero-line-3     { animation-delay: 0.5s;  }
-
-/* Ticker */
-.ticker-track  { display: flex; width: max-content; animation: ticker-scroll 22s linear infinite; }
-.ticker-inner  { display: inline-flex; align-items: center; gap: 0; }
-.ticker-item   { display: inline-flex; align-items: center; gap: 6px; font-size: 0.72rem; font-weight: 600; color: rgba(255,255,255,0.55); white-space: nowrap; padding: 0 1.4rem; }
-.ticker-label  { color: rgba(93,235,185,0.8); }
-.ticker-sep    { color: rgba(255,255,255,0.12); font-size: 0.7rem; }
-.ticker-dot    { display: inline-block; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-
-.reveal {
-  opacity: 0;
-  transform: translateY(26px);
-  transition:
-    opacity  0.65s cubic-bezier(.22,1,.36,1),
-    transform 0.65s cubic-bezier(.22,1,.36,1);
-}
-.reveal.visible { opacity: 1; transform: none; }
-.delay-1 { transition-delay: 0.10s; }
-.delay-2 { transition-delay: 0.20s; }
-.delay-3 { transition-delay: 0.30s; }
-.delay-4 { transition-delay: 0.40s; }
-
-.fade-up-enter-active,
-.fade-up-leave-active {
-  transition: opacity 0.25s ease, transform 0.25s ease;
-}
-.fade-up-enter-from,
-.fade-up-leave-to {
-  opacity: 0;
-  transform: translateY(12px);
-}
-</style>
-
 <style>
-/* Global — precisa alcançar <html>/<body>.
-   overflow-x aqui (não no wrapper interno) evita quebrar o position:sticky
-   da navbar — qualquer overflow != visible num ancestral desativa sticky. */
+/* ══ GLOBAL ════════════════════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
 html {
   scroll-behavior: smooth;
-  overflow-x: hidden;
+  overflow-x: clip;
+  font-size: 16px;
 }
 body {
-  overflow-x: hidden;
+  background: #F2F0EA;
+  color: #0A0C09;
+  font-family: 'DM Sans', 'Inter', sans-serif;
+  overflow-x: clip;
+  cursor: none;
+  -webkit-font-smoothing: antialiased;
 }
-section[id] {
-  scroll-margin-top: 4rem;
+
+@media (hover: none) {
+  body { cursor: auto; }
+  .cur-dot, .cur-ring { display: none; }
 }
+
+section[id] { scroll-margin-top: 80px; }
+
+/* ══ CURSOR ════════════════════════════════════════════════════════ */
+.cur-dot {
+  position: fixed;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #2daa8a;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 9999;
+  transition: width .18s, height .18s;
+}
+.cur-dot.hover { width: 10px; height: 10px; }
+
+.cur-ring {
+  position: fixed;
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(10,12,9,0.28);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 9998;
+  transition: width .22s, height .22s, border-color .22s;
+}
+.cur-ring.hover {
+  width: 56px; height: 56px;
+  border-color: #2daa8a;
+}
+
+/* ══ SITE WRAPPER ════════════════════════════════════════════════ */
+.site {
+  background: #F2F0EA;
+  color: #0A0C09;
+}
+
+/* ══ HERO ════════════════════════════════════════════════════════ */
+.s-hero {
+  position: relative;
+  height: 100vh;
+  min-height: 600px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.hero-photo-wrap {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+.hero-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  object-position: center 30%;
+  animation: kenburns 7s cubic-bezier(.16,1,.3,1) forwards;
+}
+@keyframes kenburns {
+  0%   { transform: scale(1.32); }
+  100% { transform: scale(1.14); }
+}
+
+/* Hero staged intro */
+.intro {
+  opacity: 0;
+  transform: translateY(24px);
+  animation: intro-up .9s cubic-bezier(.22,1,.36,1) forwards;
+}
+@keyframes intro-up {
+  to { opacity: 1; transform: none; }
+}
+.h1-line {
+  display: block;
+  overflow: hidden;
+  padding-bottom: 0.05em;
+}
+.intro-line {
+  display: block;
+  transform: translateY(110%);
+  animation: intro-line 1s cubic-bezier(.22,1,.36,1) forwards;
+}
+@keyframes intro-line {
+  to { transform: translateY(0); }
+}
+.intro-1 { animation-delay: .15s; }
+.intro-2 { animation-delay: .3s; }
+.intro-3 { animation-delay: .45s; }
+.intro-4 { animation-delay: .62s; }
+.intro-5 { animation-delay: .85s; }
+
+/* Scroll hint */
+.hero-scroll-hint {
+  display: flex; align-items: center; gap: 0.5rem;
+  margin-top: 1rem;
+  font-size: 0.6rem; font-weight: 700; letter-spacing: 0.25em;
+  color: rgba(255,255,255,0.5);
+}
+.hint-line {
+  display: block; width: 34px; height: 1px;
+  background: rgba(255,255,255,0.35);
+  position: relative; overflow: hidden;
+}
+.hint-line::after {
+  content: ''; position: absolute; inset: 0;
+  background: #2daa8a;
+  animation: hint-sweep 1.8s cubic-bezier(.4,0,.2,1) infinite;
+}
+@keyframes hint-sweep {
+  0%   { transform: translateX(-100%); }
+  55%  { transform: translateX(100%); }
+  100% { transform: translateX(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-photo { animation: none; transform: scale(1.14); }
+  .intro, .intro-line { animation: none; opacity: 1; transform: none; }
+  .hint-line::after { animation: none; }
+}
+
+.hero-ov {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(6, 9, 6, 0.35) 0%,
+    rgba(6, 9, 6, 0.05) 35%,
+    rgba(6, 9, 6, 0.55) 70%,
+    rgba(6, 9, 6, 0.88) 100%
+  );
+}
+
+/* Nav */
+.hero-nav {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  padding: 1.5rem 2.5rem;
+  gap: 2rem;
+}
+.hero-logo { height: 56px; width: auto; }
+.hero-nav-links {
+  display: flex;
+  gap: 2rem;
+  margin-left: auto;
+}
+.hero-nav-links a {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: rgba(255,255,255,0.72);
+  text-decoration: none;
+  transition: color .2s;
+}
+.hero-nav-links a:hover { color: #fff; }
+.hero-nav-right { display: flex; gap: 0.75rem; align-items: center; }
+
+.nav-btn-ghost {
+  font-size: 0.8125rem; font-weight: 600; letter-spacing: 0.03em;
+  color: rgba(255,255,255,0.7);
+  text-decoration: none;
+  border: 1px solid rgba(255,255,255,0.2);
+  padding: 0.45rem 1.1rem;
+  border-radius: 100px;
+  transition: all .2s;
+}
+.nav-btn-ghost:hover { color: #fff; border-color: rgba(255,255,255,0.5); }
+
+.nav-btn-solid {
+  font-size: 0.8125rem; font-weight: 700; letter-spacing: 0.03em;
+  color: #0A0C09;
+  text-decoration: none;
+  background: #2daa8a;
+  padding: 0.45rem 1.1rem;
+  border-radius: 100px;
+  transition: opacity .2s;
+}
+.nav-btn-solid:hover { opacity: 0.88; }
+
+.hero-burger {
+  background: none; border: none;
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 4px; margin-left: auto;
+}
+.hero-burger span {
+  display: block; width: 22px; height: 1.5px;
+  background: rgba(255,255,255,0.8);
+  border-radius: 2px;
+}
+
+.mobile-menu {
+  position: absolute; top: 80px; left: 0; right: 0;
+  background: rgba(10,12,9,0.96);
+  backdrop-filter: blur(16px);
+  padding: 1.5rem 2rem;
+  display: flex; flex-direction: column; gap: 1.25rem;
+  z-index: 50;
+}
+.mobile-menu a {
+  color: rgba(255,255,255,0.8); font-weight: 500; font-size: 1rem;
+  text-decoration: none;
+}
+.mobile-cta { color: #2daa8a !important; font-weight: 700; }
+
+/* Hero body (bottom-left) */
+.hero-body {
+  position: absolute;
+  bottom: 7rem;
+  left: 2.5rem;
+  right: 2.5rem;
+  z-index: 10;
+  max-width: 780px;
+}
+
+.hero-eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: rgba(255,255,255,0.45);
+  text-transform: uppercase;
+  margin-bottom: 1rem;
+}
+
+.hero-h1 {
+  display: flex;
+  flex-direction: column;
+  line-height: 0.95;
+  margin-bottom: 2rem;
+  font-size: clamp(2.8rem, 8vw, 7rem);
+}
+.h1-thin {
+  font-weight: 200;
+  letter-spacing: 0.05em;
+  color: rgba(255,255,255,0.75);
+  text-transform: uppercase;
+}
+.h1-black {
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: #ffffff;
+  text-transform: uppercase;
+}
+.h1-sub {
+  font-size: clamp(1rem, 2.5vw, 1.5rem);
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  color: rgba(255,255,255,0.6);
+  text-transform: uppercase;
+  line-height: 1.4;
+  margin-top: 0.75rem;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+/* Hero tag (bottom-right) */
+.hero-tag {
+  position: absolute;
+  bottom: 7rem;
+  right: 2.5rem;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.2rem;
+}
+.tag-top {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  color: rgba(255,255,255,0.4);
+  text-transform: uppercase;
+}
+.tag-bottom {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: rgba(255,255,255,0.75);
+  text-transform: uppercase;
+}
+
+/* Marquee */
+.hero-marquee {
+  position: absolute;
+  bottom: 0;
+  left: 0; right: 0;
+  overflow: hidden;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  background: rgba(0,0,0,0.35);
+  z-index: 10;
+}
+@keyframes mq-scroll { 0%{transform:translateX(0)} 100%{transform:translateX(-33.33%)} }
+.mq-track {
+  display: flex;
+  white-space: nowrap;
+  animation: mq-scroll 28s linear infinite;
+}
+.mq-inner {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.4);
+  padding: 0.65rem 0;
+}
+
+@media (max-width: 768px) {
+  .hero-nav-links, .hero-nav-right { display: none; }
+  .hero-body { bottom: 6rem; left: 1.25rem; right: 1.25rem; }
+  .hero-tag { display: none; }
+}
+
+/* ══ BUTTONS ═════════════════════════════════════════════════════ */
+.btn-accent {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  background: #2daa8a;
+  color: #fff;
+  font-size: 0.875rem; font-weight: 700; letter-spacing: 0.02em;
+  padding: 0.85rem 1.75rem;
+  border-radius: 100px;
+  text-decoration: none;
+  transition: opacity .2s, transform .2s;
+}
+.btn-accent:hover { opacity: 0.88; transform: translateY(-1px); }
+
+.btn-ghost-light {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  background: transparent;
+  color: rgba(255,255,255,0.75);
+  font-size: 0.875rem; font-weight: 600; letter-spacing: 0.02em;
+  padding: 0.85rem 1.75rem;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 100px;
+  text-decoration: none;
+  transition: all .2s;
+}
+.btn-ghost-light:hover { color: #fff; border-color: rgba(255,255,255,0.5); }
+
+/* ══ SECTION COMMON ════════════════════════════════════════════════ */
+.section-eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #767670;
+  margin-bottom: 1.25rem;
+  display: block;
+}
+.section-eyebrow.light { color: rgba(255,255,255,0.35); }
+
+/* ══ STATS ════════════════════════════════════════════════════════ */
+.s-stats {
+  background: #F2F0EA;
+  border-bottom: 1px solid rgba(10,12,9,0.08);
+}
+.stats-inner {
+  max-width: 1200px; margin: 0 auto;
+  display: grid; grid-template-columns: repeat(4, 1fr);
+}
+.stat-item {
+  padding: 3rem 2rem;
+  border-right: 1px solid rgba(10,12,9,0.08);
+  text-align: center;
+}
+.stat-item:last-child { border-right: none; }
+.stat-num {
+  font-size: clamp(2.5rem, 5vw, 3.5rem);
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  color: #0A0C09;
+  line-height: 1;
+  margin-bottom: 0.5rem;
+}
+.stat-suffix {
+  font-weight: 200;
+  letter-spacing: 0.02em;
+  color: #2daa8a;
+}
+.stat-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #767670;
+}
+
+@media (max-width: 640px) {
+  .stats-inner { grid-template-columns: repeat(2, 1fr); }
+  .stat-item:nth-child(2) { border-right: none; }
+  .stat-item:nth-child(3) { border-top: 1px solid rgba(10,12,9,0.08); }
+}
+
+/* ══ STATEMENT (pinned, Apple-style scroll reveal) ═════════════════ */
+.s-statement {
+  position: relative;
+  background: #F2F0EA;
+  min-height: 180vh;
+  border-bottom: 1px solid rgba(10,12,9,0.08);
+}
+.statement-pin {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  padding: 0 2.5rem;
+  overflow: hidden;
+}
+.statement-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.st-doctor {
+  position: absolute;
+  right: 2%;
+  bottom: -12%;
+  height: 108%;
+  width: auto;
+  max-width: 46%;
+  object-fit: contain;
+  object-position: bottom;
+  filter: grayscale(65%) contrast(1.02);
+  opacity: 0.5;
+  -webkit-mask-image: linear-gradient(to top, black 55%, transparent 92%);
+          mask-image: linear-gradient(to top, black 55%, transparent 92%);
+  animation: st-doctor-float 7s ease-in-out infinite;
+  will-change: transform;
+}
+@keyframes st-doctor-float {
+  0%, 100% { margin-bottom: 0; }
+  50%      { margin-bottom: 14px; }
+}
+.st-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+  transition: transform .3s linear;
+  animation: st-drift 14s ease-in-out infinite alternate;
+}
+.st-orb-a {
+  width: 460px; height: 460px;
+  left: 6%; top: 12%;
+  background: radial-gradient(circle, rgba(45,170,138,0.32), transparent 70%);
+}
+.st-orb-b {
+  width: 400px; height: 400px;
+  right: 8%; bottom: 10%;
+  background: radial-gradient(circle, rgba(10,12,9,0.10), transparent 70%);
+  animation-delay: -7s;
+}
+@keyframes st-drift {
+  0%   { margin: 0; }
+  100% { margin: 20px 0 0 20px; }
+}
+.st-grid {
+  position: absolute;
+  inset: -1px;
+  background-image:
+    linear-gradient(rgba(10,12,9,0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(10,12,9,0.06) 1px, transparent 1px);
+  background-size: 56px 56px;
+  transition: opacity .3s linear;
+}
+.statement-inner {
+  position: relative;
+  z-index: 1;
+  max-width: 860px; margin: 0 auto;
+}
+.statement-text {
+  font-size: clamp(1.4rem, 3vw, 2.25rem);
+  font-weight: 300;
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+  color: #0A0C09;
+  margin-bottom: 2rem;
+}
+.st-w {
+  color: rgba(10,12,9,0.16);
+  transition: color .35s ease;
+}
+.st-w.on { color: #0A0C09; }
+.link-arrow {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  font-size: 0.875rem; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #2daa8a;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  padding-bottom: 2px;
+  transition: border-color .2s;
+}
+.link-arrow:hover { border-bottom-color: #2daa8a; }
+
+/* ══ FEATURES ════════════════════════════════════════════════════ */
+.s-features {
+  background: #F2F0EA;
+  padding: 7rem 2.5rem;
+  border-bottom: 1px solid rgba(10,12,9,0.08);
+}
+.features-grid {
+  max-width: 1200px; margin: 0 auto;
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 5rem;
+}
+.features-left {
+  position: sticky;
+  top: 6rem;
+  align-self: start;
+}
+.features-headline {
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  color: #0A0C09;
+  margin-bottom: 2.5rem;
+}
+.features-photo {
+  display: block;
+  width: 100%; height: auto; border-radius: 4px;
+  aspect-ratio: 4/3; object-fit: cover;
+  filter: grayscale(20%) contrast(1.05);
+}
+.features-right {
+  display: flex; flex-direction: column; gap: 0;
+}
+.feat-row {
+  display: grid;
+  grid-template-columns: 2.5rem 1fr 1.5rem;
+  gap: 1.25rem;
+  align-items: start;
+  padding: 1.75rem 0;
+  border-bottom: 1px solid rgba(10,12,9,0.08);
+  transition: background .2s;
+}
+.feat-row:hover { background: rgba(10,12,9,0.02); }
+.feat-n {
+  font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.1em;
+  color: #2daa8a;
+  padding-top: 0.2rem;
+}
+.feat-title {
+  font-size: 1rem; font-weight: 700; color: #0A0C09;
+  margin-bottom: 0.35rem;
+}
+.feat-desc { font-size: 0.875rem; line-height: 1.6; color: #767670; }
+.feat-check { color: #2daa8a; margin-top: 0.25rem; }
+
+@media (max-width: 768px) {
+  .features-grid { grid-template-columns: 1fr; gap: 3rem; }
+  .features-left { position: static; }
+  .features-photo { display: none; }
+}
+
+/* ══ DEMO (dark) ═════════════════════════════════════════════════ */
+.s-demo {
+  background: #0C0F0D;
+  padding: 7rem 2.5rem;
+}
+.demo-header {
+  max-width: 700px; margin: 0 auto 4rem;
+  text-align: center;
+}
+.demo-h2 {
+  font-size: clamp(2rem, 4.5vw, 3.5rem);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  color: #fff;
+  margin-bottom: 1rem;
+}
+.demo-sub { font-size: 1rem; line-height: 1.6; color: rgba(255,255,255,0.5); }
+
+/* App window */
+.demo-persp {
+  perspective: 1400px;
+  perspective-origin: 50% 0%;
+}
+.demo-window {
+  max-width: 1100px; margin: 0 auto;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 40px 100px rgba(0,0,0,0.6);
+  transform-origin: 50% 100%;
+  will-change: transform, opacity;
+}
+.dw-bar {
+  display: flex; align-items: center; gap: 0.5rem;
+  background: #161b1a; padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.dw-dot { width: 11px; height: 11px; border-radius: 50%; }
+.dw-dot.red { background: #ff5f57; }
+.dw-dot.yellow { background: #ffbd2e; }
+.dw-dot.green { background: #28ca41; }
+.dw-url {
+  flex: 1; margin: 0 0.75rem;
+  font-size: 0.7rem; color: rgba(255,255,255,0.3);
+  text-align: center;
+  background: rgba(255,255,255,0.05);
+  border-radius: 4px; padding: 0.3rem 0.75rem;
+}
+.dw-live {
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em;
+  color: #2daa8a; display: flex; align-items: center; gap: 0.35rem;
+}
+.dw-blink {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #2daa8a; animation: pulse-dot 1.4s ease-in-out infinite;
+}
+@keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+.dw-body {
+  display: grid; grid-template-columns: 2fr 1fr; min-height: 340px;
+}
+
+/* Video area */
+.dw-video {
+  position: relative; background: #0a1422; overflow: hidden;
+}
+.dw-patient-bg {
+  position: absolute; inset: 0;
+  background: linear-gradient(135deg, #0a1628, #0f2040);
+  display: flex; align-items: center; justify-content: center;
+}
+.dw-avatar {
+  width: 80px; height: 80px; border-radius: 50%;
+  background: linear-gradient(135deg, #1a3a5f, #2a4f7a);
+  border: 2px solid rgba(255,255,255,0.06);
+}
+.dw-name-tag {
+  position: absolute; bottom: 3.5rem; left: 0.75rem;
+  font-size: 0.7rem; font-weight: 600; color: white;
+  background: rgba(0,0,0,0.65); padding: 0.3rem 0.6rem; border-radius: 4px;
+  backdrop-filter: blur(8px);
+}
+.dw-rec {
+  position: absolute; top: 0.75rem; left: 0.75rem;
+  display: flex; align-items: center; gap: 0.35rem;
+  font-size: 0.7rem; font-weight: 700; color: white;
+  background: rgba(0,0,0,0.6); padding: 0.3rem 0.6rem; border-radius: 4px;
+  backdrop-filter: blur(8px);
+}
+.dw-rec-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #ef4444; animation: pulse-dot 1s ease-in-out infinite;
+}
+.dw-self {
+  position: absolute; bottom: 0.75rem; right: 0.75rem;
+  width: 80px; height: 60px; border-radius: 6px; overflow: hidden;
+  border: 1.5px solid rgba(255,255,255,0.12);
+  background: linear-gradient(135deg, #1a3a5c, #1e4d9a);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+}
+.dw-self-av {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: linear-gradient(135deg, #2d62bc, #163c7d);
+}
+.dw-self-name { font-size: 8px; color: rgba(255,255,255,0.6); }
+.dw-controls {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  display: flex; align-items: center; justify-content: center; gap: 0.6rem;
+  padding: 0.6rem;
+  background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+}
+.dw-ctrl {
+  width: 36px; height: 36px; border-radius: 50%; border: none;
+  background: rgba(255,255,255,0.1); font-size: 0.85rem;
+  display: flex; align-items: center; justify-content: center; color: white;
+  cursor: pointer; transition: background .2s;
+}
+.dw-ctrl:hover { background: rgba(255,255,255,0.18); }
+.dw-ctrl.end { background: #ef4444; }
+.dw-ctrl.end:hover { background: #dc2626; }
+
+/* Sidebar */
+.dw-sidebar {
+  border-left: 1px solid rgba(255,255,255,0.06);
+  background: #0d1117; display: flex; flex-direction: column;
+}
+.dw-vitals { padding: 1rem; border-bottom: 1px solid rgba(255,255,255,0.06); flex: 1; }
+.dw-vitals-hdr {
+  display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.75rem;
+  font-size: 0.65rem; font-weight: 700; letter-spacing: 0.06em;
+  color: rgba(255,255,255,0.5);
+}
+.dw-bt-tag {
+  margin-left: auto; font-size: 0.55rem; font-weight: 800; letter-spacing: 0.1em;
+  background: rgba(45,170,138,0.15); color: #7de8d0;
+  padding: 1px 5px; border-radius: 3px;
+}
+.dw-vital-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0.4rem 0.5rem; border-radius: 5px; margin-bottom: 0.2rem;
+  background: rgba(255,255,255,0.03);
+}
+.dw-vl { font-size: 0.7rem; color: rgba(255,255,255,0.4); }
+.dw-vv { font-size: 0.8rem; font-weight: 700; color: #2daa8a; transition: color .5s; }
+.dw-vu { font-size: 0.6rem; color: rgba(255,255,255,0.28); font-weight: 400; }
+.dw-ecg {
+  margin-top: 0.5rem; border-radius: 4px; overflow: hidden;
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); height: 30px;
+}
+.dw-ecg-svg {
+  width: 100%; height: 100%;
+}
+.dw-ecg-svg polyline {
+  stroke-dasharray: 600; animation: ecg 3s linear infinite;
+}
+@keyframes ecg { 0%{stroke-dashoffset:600} 100%{stroke-dashoffset:0} }
+
+.dw-queue { padding: 0.75rem 1rem; }
+.dw-q-hdr {
+  font-size: 0.65rem; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: rgba(255,255,255,0.35);
+  margin-bottom: 0.5rem;
+}
+.dw-q-row {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.4rem 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.dw-q-av {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: rgba(45,170,138,0.15); color: #7de8d0;
+  font-size: 9px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.dw-q-info { flex: 1; min-width: 0; }
+.dw-q-name { font-size: 0.7rem; font-weight: 600; color: rgba(255,255,255,0.72); display: block; truncate: true; overflow: hidden; white-space: nowrap; }
+.dw-q-status { font-size: 0.6rem; color: rgba(255,255,255,0.3); }
+.dw-q-badge { font-size: 0.55rem; font-weight: 800; color: #7de8d0; background: rgba(45,170,138,0.12); padding: 2px 5px; border-radius: 3px; flex-shrink: 0; }
+
+@media (max-width: 640px) {
+  .dw-body { grid-template-columns: 1fr; }
+  .dw-sidebar { display: none; }
+  .dw-video { min-height: 240px; }
+}
+
+/* ══ SPECIALTIES ════════════════════════════════════════════════ */
+.s-specs {
+  background: #F2F0EA;
+  padding: 7rem 2.5rem;
+  border-top: 1px solid rgba(10,12,9,0.08);
+}
+.specs-inner { max-width: 900px; margin: 0 auto; }
+.specs-h2 {
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 900; letter-spacing: -0.03em; line-height: 1.05;
+  color: #0A0C09; margin-bottom: 2.5rem;
+}
+.specs-chips {
+  display: flex; flex-wrap: wrap; gap: 0.65rem;
+}
+.spec-chip {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  font-size: 0.8125rem; font-weight: 600;
+  color: #0A0C09;
+  border: 1px solid rgba(10,12,9,0.14);
+  padding: 0.55rem 1.1rem; border-radius: 100px;
+  transition: all .2s;
+}
+.spec-chip:hover { background: #0A0C09; color: #F2F0EA; }
+.spec-chip.ghost { color: #767670; border-style: dashed; }
+
+/* ══ HOW IT WORKS (dark) ════════════════════════════════════════ */
+.s-steps {
+  background: #0C0F0D;
+  padding: 7rem 2.5rem;
+}
+.steps-hdr {
+  max-width: 1200px; margin: 0 auto 4rem; padding: 0;
+}
+.steps-h2 {
+  font-size: clamp(2rem, 4.5vw, 3.5rem);
+  font-weight: 900; letter-spacing: -0.03em; line-height: 1.05;
+  color: #fff;
+}
+.steps-list {
+  max-width: 1200px; margin: 0 auto;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem;
+}
+.step { display: flex; flex-direction: column; gap: 1.25rem; }
+.step { transition-delay: var(--delay, 0s); }
+.step-img-wrap {
+  border-radius: 6px; overflow: hidden;
+  background: rgba(255,255,255,0.04);
+  aspect-ratio: 4/3;
+}
+.step-img { width: 100%; height: 100%; object-fit: cover; filter: brightness(0.8); }
+.step-body { padding: 0 0.25rem; }
+.step-n {
+  font-size: 0.65rem; font-weight: 800; letter-spacing: 0.15em;
+  color: #2daa8a; display: block; margin-bottom: 0.5rem;
+}
+.step-title {
+  font-size: 1rem; font-weight: 700; color: #fff; margin-bottom: 0.4rem;
+}
+.step-desc { font-size: 0.875rem; line-height: 1.6; color: rgba(255,255,255,0.45); }
+
+@media (max-width: 768px) {
+  .steps-list { grid-template-columns: 1fr; max-width: 480px; }
+}
+
+/* ══ WHERE ════════════════════════════════════════════════════════ */
+.s-where {
+  background: #F2F0EA;
+  padding: 7rem 2.5rem;
+  border-top: 1px solid rgba(10,12,9,0.08);
+}
+.where-banner {
+  position: relative;
+  max-width: 1200px; margin: 0 auto 3rem;
+  border-radius: 8px; overflow: hidden;
+  aspect-ratio: 21/9;
+  display: flex; align-items: flex-end;
+}
+.where-banner-video {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%; object-fit: cover;
+}
+.where-banner-ov {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(6,9,6,0.75) 0%, rgba(6,9,6,0.15) 55%, rgba(6,9,6,0.35) 100%);
+}
+.where-hdr { position: relative; z-index: 2; padding: 2.5rem; }
+.where-h2 {
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 900; letter-spacing: -0.03em; line-height: 1.05;
+  color: #0A0C09;
+}
+.where-h2.light { color: #fff; }
+.where-grid {
+  max-width: 1200px; margin: 0 auto;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.25rem;
+}
+.where-card { display: flex; flex-direction: column; gap: 0.75rem; }
+.where-card { transition-delay: var(--delay, 0s); }
+.where-img-wrap { position: relative; border-radius: 6px; overflow: hidden; aspect-ratio: 3/4; }
+.where-img { width: 100%; height: 100%; object-fit: cover; filter: grayscale(30%); transition: transform .5s; }
+.where-card:hover .where-img { transform: scale(1.04); }
+.where-tag {
+  position: absolute; bottom: 0.75rem; left: 0.75rem;
+  font-size: 0.6rem; font-weight: 800; letter-spacing: 0.12em;
+  background: #2daa8a; color: #fff; padding: 0.25rem 0.5rem; border-radius: 3px;
+}
+.where-title { font-size: 0.9375rem; font-weight: 700; color: #0A0C09; }
+
+@media (max-width: 900px) {
+  .where-grid { grid-template-columns: repeat(2, 1fr); }
+  .where-banner { aspect-ratio: 4/3; }
+}
+@media (max-width: 480px) {
+  .where-grid { grid-template-columns: 1fr; }
+}
+
+/* ══ TEAM ════════════════════════════════════════════════════════ */
+.s-team {
+  background: #F2F0EA;
+  padding: 5rem 2.5rem;
+  border-top: 1px solid rgba(10,12,9,0.08);
+  border-bottom: 1px solid rgba(10,12,9,0.08);
+}
+.team-inner { max-width: 860px; margin: 0 auto; }
+.team-card {
+  display: flex; gap: 2.5rem; align-items: center;
+  padding-top: 1.5rem;
+}
+.team-photo {
+  width: 120px; height: 120px; border-radius: 6px;
+  object-fit: cover; flex-shrink: 0;
+  filter: grayscale(20%);
+}
+.team-name { font-size: 1.25rem; font-weight: 900; letter-spacing: -0.01em; color: #0A0C09; }
+.team-crm  { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.12em; color: #2daa8a; text-transform: uppercase; margin: 0.25rem 0 0.75rem; }
+.team-text { font-size: 0.9rem; line-height: 1.65; color: #767670; }
+
+@media (max-width: 560px) {
+  .team-card { flex-direction: column; }
+}
+
+/* ══ CTA (dark) ═══════════════════════════════════════════════════ */
+.s-cta {
+  background: #0C0F0D;
+  padding: 8rem 2.5rem;
+  position: relative;
+  overflow: hidden;
+}
+.cta-inner {
+  max-width: 800px; margin: 0 auto; position: relative; z-index: 2;
+}
+.cta-h2 {
+  font-size: clamp(2.5rem, 6vw, 5rem);
+  font-weight: 900; letter-spacing: -0.04em; line-height: 1;
+  color: #fff; margin-bottom: 1.25rem;
+}
+.cta-sub {
+  font-size: 1rem; color: rgba(255,255,255,0.45);
+  margin-bottom: 2.5rem;
+}
+.cta-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.cta-hours {
+  margin-top: 2rem; font-size: 0.75rem; letter-spacing: 0.06em;
+  text-transform: uppercase; color: rgba(255,255,255,0.25);
+}
+.cta-bg-text {
+  position: absolute; bottom: -0.5rem; right: -1rem;
+  font-size: clamp(6rem, 18vw, 16rem);
+  font-weight: 900; letter-spacing: -0.05em; line-height: 0.88;
+  color: rgba(255,255,255,0.025);
+  pointer-events: none; user-select: none;
+  text-transform: uppercase;
+}
+
+/* ══ FOOTER ════════════════════════════════════════════════════════ */
+.s-footer {
+  background: #080B08;
+  padding: 3rem 2.5rem 2rem;
+}
+.footer-top {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  flex-wrap: wrap; gap: 2rem;
+  padding-bottom: 2rem;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  margin-bottom: 1.5rem;
+}
+.footer-logo { height: 48px; width: auto; filter: brightness(0) invert(1); opacity: 0.6; }
+.footer-nav { display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: center; }
+.footer-nav a {
+  font-size: 0.8125rem; font-weight: 500;
+  color: rgba(255,255,255,0.4); text-decoration: none;
+  transition: color .2s;
+}
+.footer-nav a:hover { color: rgba(255,255,255,0.8); }
+.footer-contact {
+  display: flex; flex-direction: column; gap: 0.25rem;
+  font-size: 0.8rem; color: rgba(255,255,255,0.3);
+  text-align: right;
+}
+.footer-contact a { color: rgba(255,255,255,0.45); text-decoration: none; }
+.footer-bottom {
+  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;
+  font-size: 0.72rem; color: rgba(255,255,255,0.22);
+}
+.footer-legal { display: flex; gap: 1.25rem; }
+.footer-legal a { color: rgba(255,255,255,0.22); text-decoration: none; }
+.footer-legal a:hover { color: rgba(255,255,255,0.5); }
+
+/* ══ FLOATS ════════════════════════════════════════════════════════ */
+.wa-float {
+  position: fixed; bottom: 1.5rem; left: 1.5rem; z-index: 50;
+  width: 48px; height: 48px; border-radius: 50%;
+  background: #25d366;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 20px rgba(37,211,102,0.4);
+  transition: transform .2s, box-shadow .2s;
+}
+.wa-float:hover { transform: scale(1.08); box-shadow: 0 4px 32px rgba(37,211,102,0.6); }
+
+.btt {
+  position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 50;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: #0A0C09;
+  color: white; border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform .2s;
+}
+.btt:hover { transform: translateY(-2px); }
+
+.bt-enter-active, .bt-leave-active { transition: opacity .25s, transform .25s; }
+.bt-enter-from, .bt-leave-to { opacity: 0; transform: translateY(10px); }
+
+/* ══ REVEAL ANIMATIONS ══════════════════════════════════════════ */
+.reveal {
+  opacity: 0; transform: translateY(28px); filter: blur(6px);
+  transition: opacity .8s cubic-bezier(.22,1,.36,1), transform .8s cubic-bezier(.22,1,.36,1), filter .8s cubic-bezier(.22,1,.36,1);
+  transition-delay: var(--delay, 0s);
+}
+.reveal.visible { opacity: 1; transform: none; filter: none; }
+
+.reveal-l {
+  opacity: 0; transform: translateX(-36px); filter: blur(6px);
+  transition: opacity .8s cubic-bezier(.22,1,.36,1), transform .8s cubic-bezier(.22,1,.36,1), filter .8s cubic-bezier(.22,1,.36,1);
+}
+.reveal-l.visible { opacity: 1; transform: none; filter: none; }
+
+.reveal-r {
+  opacity: 0; transform: translateX(36px); filter: blur(6px);
+  transition: opacity .8s cubic-bezier(.22,1,.36,1), transform .8s cubic-bezier(.22,1,.36,1), filter .8s cubic-bezier(.22,1,.36,1);
+}
+.reveal-r.visible { opacity: 1; transform: none; filter: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal, .reveal-l, .reveal-r { opacity: 1; transform: none; filter: none; transition: none; }
+  .mq-track { animation: none; }
+  .s-statement { min-height: auto; }
+  .statement-pin { position: static; height: auto; padding: 7rem 2.5rem; }
+  .st-orb { animation: none; }
+  .st-doctor { animation: none; }
+}
+
+/* ══ MOBILE TUNING ═══════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .s-stats, .s-features, .s-demo,
+  .s-specs, .s-steps, .s-where, .s-team, .s-cta {
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+  .s-features, .s-demo, .s-specs, .s-steps, .s-where, .s-cta {
+    padding-top: 4rem;
+    padding-bottom: 4rem;
+  }
+  .s-statement { min-height: 145vh; }
+  .statement-pin { padding: 0 1.25rem; }
+  .s-team { padding-top: 3rem; padding-bottom: 3rem; }
+
+  .statement-text { font-size: clamp(1.2rem, 5vw, 1.6rem); }
+
+  .demo-window { border-radius: 8px; }
+  .dw-bar { padding: 0.6rem 0.75rem; }
+  .dw-url { display: none; }
+
+  .where-banner { aspect-ratio: 3/4; border-radius: 6px; margin-bottom: 2rem; }
+  .where-hdr { padding: 1.5rem; }
+  .where-grid { gap: 0.85rem; }
+
+  .cta-actions { flex-direction: column; align-items: stretch; }
+  .cta-actions a { justify-content: center; text-align: center; }
+  .cta-bg-text { display: none; }
+
+  .footer-contact { text-align: left; }
+  .footer-top { flex-direction: column; align-items: flex-start; }
+}
+
+@media (max-width: 420px) {
+  .hero-h1 { font-size: clamp(2.4rem, 12vw, 3.5rem); }
+  .btn-accent, .btn-ghost-light { width: 100%; justify-content: center; }
+  .hero-actions { flex-direction: column; align-items: stretch; }
+}
+
+.delay-1 { transition-delay: .08s; }
+.delay-2 { transition-delay: .16s; }
+.delay-3 { transition-delay: .24s; }
+.delay-4 { transition-delay: .32s; }
+.delay-5 { transition-delay: .40s; }
 </style>
