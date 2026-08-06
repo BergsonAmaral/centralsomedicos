@@ -843,7 +843,14 @@ section[id] { scroll-margin-top: 80px; }
   padding: 1.5rem 2.5rem;
   gap: 2rem;
 }
-.hero-logo { height: 56px; width: auto; }
+.hero-logo {
+  height: 76px; width: auto;
+  padding: 0.6rem 1.1rem;
+  background: rgba(255,255,255,0.9);
+  border-radius: 12px;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 2px 14px rgba(0,0,0,0.12);
+}
 .hero-nav-links {
   display: flex;
   gap: 2rem;
@@ -1444,8 +1451,8 @@ section[id] { scroll-margin-top: 80px; }
 
 @media (max-width: 640px) {
   .dw-body { grid-template-columns: 1fr; }
-  .dw-sidebar { display: none; }
-  .dw-video { min-height: 240px; }
+  .dw-sidebar { border-left: none; border-top: 1px solid rgba(255,255,255,0.06); }
+  .dw-video { min-height: 300px; }
 }
 
 /* ══ SPECIALTIES ════════════════════════════════════════════════ */
