@@ -293,28 +293,37 @@ const mockQueue = [
           </div>
         </div>
 
-        <!-- Mock dashboard -->
+        <!-- Foto real + cards flutuantes -->
         <div class="flex-1 flex justify-center lg:justify-end shrink-0">
-          <div class="relative w-full max-w-[330px] float-el">
-            <div class="rounded-2xl p-5 shadow-2xl" style="background:rgba(255,255,255,0.07);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.1)">
-              <div class="flex items-center justify-between mb-4">
+          <div class="relative w-full max-w-[380px] float-el">
+            <div class="rounded-3xl overflow-hidden shadow-2xl" style="border:1px solid rgba(255,255,255,0.15)">
+              <img
+                src="/foto-teleconsulta.jpg"
+                alt="Teleconsulta SóMedicos — paciente com médico na tela e enfermeira ao lado"
+                class="w-full h-auto block"
+                style="aspect-ratio:4/5;object-fit:cover"
+              />
+            </div>
+
+            <!-- Fila ao vivo flutuante -->
+            <div class="absolute -left-6 top-6 rounded-2xl p-4 shadow-2xl w-[210px]" style="background:rgba(15,23,42,0.85);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.12)">
+              <div class="flex items-center justify-between mb-3">
                 <div class="flex items-center gap-2">
                   <span class="w-2 h-2 rounded-full animate-pulse inline-block" style="background:#2daa8a" />
-                  <span class="text-white text-sm font-semibold">Fila ao vivo</span>
+                  <span class="text-white text-xs font-semibold">Fila ao vivo</span>
                 </div>
-                <span class="text-xs px-2 py-0.5 rounded-full font-medium" style="background:rgba(45,170,138,0.18);color:#7de8d0">3 pacientes</span>
+                <span class="text-[10px] px-2 py-0.5 rounded-full font-medium" style="background:rgba(45,170,138,0.18);color:#7de8d0">3</span>
               </div>
-              <div class="space-y-2">
-                <div v-for="p in mockQueue" :key="p.name" class="flex items-center gap-3 p-2.5 rounded-xl" style="background:rgba(255,255,255,0.05)">
-                  <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0" :style="`background:${p.c}30;color:${p.c === '#163c7d' ? '#93c5fd' : p.c === '#1e4d9a' ? '#93c5fd' : '#7de8d0'}`">{{ p.initials }}</div>
+              <div class="space-y-1.5">
+                <div v-for="p in mockQueue.slice(0, 2)" :key="p.name" class="flex items-center gap-2 p-1.5 rounded-lg" style="background:rgba(255,255,255,0.05)">
+                  <div class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0" :style="`background:${p.c}30;color:${p.c === '#163c7d' ? '#93c5fd' : p.c === '#1e4d9a' ? '#93c5fd' : '#7de8d0'}`">{{ p.initials }}</div>
                   <div class="flex-1 min-w-0">
-                    <p class="text-white text-xs font-semibold truncate">{{ p.name }}</p>
-                    <p class="text-xs truncate" style="color:rgba(255,255,255,0.65)">{{ p.status }}</p>
+                    <p class="text-white text-[11px] font-semibold truncate">{{ p.name }}</p>
                   </div>
-                  <span class="text-xs px-2 py-0.5 rounded-full shrink-0 font-medium" style="background:rgba(45,170,138,0.18);color:#7de8d0">{{ p.badge }}</span>
                 </div>
               </div>
             </div>
+
             <!-- Sinais vitais flutuante -->
             <div class="absolute -right-5 -bottom-5 rounded-2xl p-4 shadow-2xl" style="background:white;min-width:155px">
               <div class="flex items-center gap-1.5 mb-3">
