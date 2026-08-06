@@ -14,6 +14,25 @@ const user = useSupabaseUser()
 const checking = ref(true)
 const mobileMenu = ref(false)
 
+// ── Scroll: progresso, navbar reativa, parallax, botão "topo" ──────────────
+const scrollProgress = ref(0)
+const navScrolled = ref(false)
+const showBackToTop = ref(false)
+const parallaxY = ref(0)
+
+function onScroll() {
+  const scrollTop = window.scrollY
+  const docHeight = document.documentElement.scrollHeight - window.innerHeight
+  scrollProgress.value = docHeight > 0 ? Math.min(100, (scrollTop / docHeight) * 100) : 0
+  navScrolled.value = scrollTop > 24
+  showBackToTop.value = scrollTop > 700
+  parallaxY.value = scrollTop
+}
+
+function scrollToTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
 onMounted(async () => {
   if (user.value) {
     const { data } = await supabase.from('profiles').select('role').eq('id', user.value.id).single()
@@ -27,6 +46,13 @@ onMounted(async () => {
     { threshold: 0.1 }
   )
   document.querySelectorAll('.reveal').forEach(el => io.observe(el))
+
+  window.addEventListener('scroll', onScroll, { passive: true })
+  onScroll()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', onScroll)
 })
 
 const services = [
@@ -83,22 +109,25 @@ const steps = [
   {
     n: '01', title: 'Você nos contacta',
     desc: 'Apresentamos a plataforma, entendemos o seu fluxo de atendimento e elaboramos uma proposta alinhada à realidade da sua instituição.',
+    img: '/ilustra-passo1-contato.png',
   },
   {
     n: '02', title: 'Instalamos tudo na sua unidade',
     desc: 'Nossa equipe vai até você — configura a infraestrutura física, os equipamentos de telemetria, médicos, salas e fluxos. Treinamos recepcionistas e equipe de saúde. Operacional no mesmo dia.',
+    img: '/ilustra-passo2-instalacao.png',
   },
   {
     n: '03', title: 'Atendimento com qualidade',
     desc: 'Teleconsultas com exame físico real, prontuário completo e documentos automáticos. Seus pacientes saem com toda a documentação em mãos.',
+    img: '/ilustra-passo3-atendimento.png',
   },
 ]
 
 const where = [
-  { icon: Building2,  title: 'Hospitais e Clínicas',      desc: 'Instalamos a estrutura completa de teleconsulta — equipamentos, plataforma e médicos — integrada ao fluxo já existente da sua unidade.', c: '#1e4d9a', bg: '#e8eef8' },
-  { icon: MapPin,     title: 'UBS e Postos de Saúde',      desc: 'Gestão de filas SUS, importação de agenda e acesso a especialistas remotos. Estrutura instalada na unidade, sem obras.', c: '#2daa8a', bg: '#e6f5f1' },
-  { icon: Truck,      title: 'Atendimento Itinerante',      desc: 'Levamos toda a estrutura até municípios remotos, feiras de saúde e campanhas móveis. Teleconsultas com exame físico onde o paciente está.', c: '#2daa8a', bg: '#e6f5f1' },
-  { icon: HeartPulse, title: 'Regiões Remotas e Rurais',   desc: 'Especialistas médicos a municípios sem acesso presencial — com telemetria Bluetooth ao vivo e prontuário digital completo.', c: '#1e4d9a', bg: '#e8eef8' },
+  { icon: Building2,  title: 'Hospitais e Clínicas',      desc: 'Instalamos a estrutura completa de teleconsulta — equipamentos, plataforma e médicos — integrada ao fluxo já existente da sua unidade.', c: '#1e4d9a', bg: '#e8eef8', img: '/ilustra-hospital.png' },
+  { icon: MapPin,     title: 'UBS e Postos de Saúde',      desc: 'Gestão de filas SUS, importação de agenda e acesso a especialistas remotos. Estrutura instalada na unidade, sem obras.', c: '#2daa8a', bg: '#e6f5f1', img: '/ilustra-ubs.png' },
+  { icon: Truck,      title: 'Atendimento Itinerante',      desc: 'Levamos toda a estrutura até municípios remotos, feiras de saúde e campanhas móveis. Teleconsultas com exame físico onde o paciente está.', c: '#2daa8a', bg: '#e6f5f1', img: '/ilustra-itinerante.png' },
+  { icon: HeartPulse, title: 'Regiões Remotas e Rurais',   desc: 'Especialistas médicos a municípios sem acesso presencial — com telemetria Bluetooth ao vivo e prontuário digital completo.', c: '#1e4d9a', bg: '#e8eef8', img: '/ilustra-rural.png' },
 ]
 
 const numbers = [
@@ -129,14 +158,35 @@ const mockQueue = [
     <div class="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin" style="border-color:#2daa8a;border-top-color:transparent" />
   </div>
 
-  <div v-else style="font-family:'Inter',sans-serif;color:#0f172a;background:#ffffff;overflow-x:hidden">
+  <div v-else style="font-family:'Inter',sans-serif;color:#0f172a;background:#ffffff">
+
+    <!-- ── BARRA DE PROGRESSO DE SCROLL ────────────── -->
+    <div class="fixed top-0 left-0 right-0 z-[60]" style="height:3px;background:transparent">
+      <div
+        style="height:100%;background:linear-gradient(90deg,#1e4d9a,#2daa8a);transition:width 0.1s linear"
+        :style="{ width: scrollProgress + '%' }"
+      />
+    </div>
 
     <!-- ── NAVBAR ─────────────────────────────────── -->
-    <nav class="sticky top-0 z-50" style="background:rgba(255,255,255,0.97);backdrop-filter:blur(16px);border-bottom:2px solid #e8eef8;box-shadow:0 2px 16px rgba(30,77,154,0.06)">
-      <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+    <nav
+      class="sticky top-0 z-50 transition-all duration-300"
+      :style="navScrolled
+        ? 'background:rgba(255,255,255,0.97);backdrop-filter:blur(16px);border-bottom:2px solid #e8eef8;box-shadow:0 2px 16px rgba(30,77,154,0.06)'
+        : 'background:rgba(255,255,255,0.85);backdrop-filter:blur(8px);border-bottom:2px solid transparent;box-shadow:none'"
+    >
+      <div
+        class="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between transition-all duration-300"
+        :style="navScrolled ? 'height:3.5rem' : 'height:4rem'"
+      >
         <!-- Logo real -->
         <a href="#">
-          <img src="/logo.png" alt="Central SóMedicos" style="height:90px;width:auto;display:block" />
+          <img
+            src="/logo.png"
+            alt="Central SóMedicos"
+            class="transition-all duration-300"
+            :style="navScrolled ? 'height:70px;width:auto;display:block' : 'height:90px;width:auto;display:block'"
+          />
         </a>
         <!-- Links desktop -->
         <div class="hidden md:flex items-center gap-7 text-sm font-semibold" style="color:#475569">
@@ -173,9 +223,17 @@ const mockQueue = [
 
     <!-- ── HERO ───────────────────────────────────── -->
     <section class="relative overflow-hidden" style="background:linear-gradient(135deg,#080f1e 0%,#0e2550 42%,#0b3326 100%);min-height:94vh;display:flex;align-items:center">
-      <!-- Orbs -->
-      <div class="glow-orb" style="position:absolute;width:700px;height:700px;background:radial-gradient(circle,rgba(45,170,138,0.22) 0%,transparent 65%);top:-150px;right:-100px;pointer-events:none" />
-      <div class="glow-orb" style="position:absolute;width:500px;height:500px;background:radial-gradient(circle,rgba(93,150,250,0.2) 0%,transparent 65%);bottom:-100px;left:-50px;pointer-events:none;animation-delay:2s" />
+      <!-- Orbs (parallax leve no scroll) -->
+      <div
+        class="glow-orb"
+        style="position:absolute;width:700px;height:700px;background:radial-gradient(circle,rgba(45,170,138,0.22) 0%,transparent 65%);top:-150px;right:-100px;pointer-events:none"
+        :style="{ transform: `translateY(${parallaxY * 0.15}px)` }"
+      />
+      <div
+        class="glow-orb"
+        style="position:absolute;width:500px;height:500px;background:radial-gradient(circle,rgba(93,150,250,0.2) 0%,transparent 65%);bottom:-100px;left:-50px;pointer-events:none;animation-delay:2s"
+        :style="{ transform: `translateY(${parallaxY * -0.1}px)` }"
+      />
       <!-- Grid -->
       <div style="position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,0.04) 1px,transparent 1px);background-size:30px 30px;pointer-events:none" />
 
@@ -344,8 +402,15 @@ const mockQueue = [
     </section>
 
     <!-- ── DIFERENCIAIS ──────────────────────────────── -->
-    <section id="diferenciais" class="py-24 px-4 sm:px-6" style="background:#f8faff">
-      <div class="max-w-5xl mx-auto">
+    <section id="diferenciais" class="py-24 px-4 sm:px-6 relative overflow-hidden" style="background:#f8faff">
+      <img
+        src="/bg-diferenciais.png"
+        alt=""
+        aria-hidden="true"
+        class="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
+        style="opacity:0.06;transform:scale(1.1)"
+      />
+      <div class="max-w-5xl mx-auto relative">
         <div class="text-center mb-16 reveal">
           <span class="inline-block text-xs font-bold px-3 py-1.5 rounded-full mb-4 uppercase tracking-wide" style="background:#e6f5f1;color:#1a6b56">Por que a Central SóMedicos?</span>
           <h2 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold mb-4 tracking-tight leading-tight" style="color:#0b1120">
@@ -564,13 +629,14 @@ const mockQueue = [
 
     <!-- ── ESPECIALIDADES (chips) ──────────────────── -->
     <section id="especialidades" class="py-24 px-4 sm:px-6" style="background:#ffffff">
-      <div class="max-w-4xl mx-auto text-center">
+      <div class="max-w-4xl mx-auto text-center reveal">
         <span class="inline-block text-xs font-bold px-3 py-1.5 rounded-full mb-4 uppercase tracking-wide" style="background:#e8eef8;color:#1e4d9a">Especialidades</span>
         <h2 class="text-3xl sm:text-4xl font-extrabold mb-4 tracking-tight" style="color:#0b1120">Corpo clínico treinado<br>em telemedicina com exame físico</h2>
         <p class="text-lg max-w-xl mx-auto mb-12" style="color:#64748b">Médicos capacitados para atender remotamente com qualidade de consultório presencial.</p>
         <div class="flex flex-wrap justify-center gap-3">
-          <div v-for="sp in specialties" :key="sp.label"
-               class="inline-flex items-center gap-2.5 px-5 py-3 rounded-2xl border font-semibold text-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+          <div v-for="(sp, i) in specialties" :key="sp.label"
+               class="inline-flex items-center gap-2.5 px-5 py-3 rounded-2xl border font-semibold text-sm transition-all hover:-translate-y-0.5 hover:shadow-md reveal"
+               :class="`delay-${(i % 4) + 1}`"
                style="border-color:#e2e8f4;background:#f8faff">
             <div class="w-7 h-7 rounded-xl flex items-center justify-center" style="background:linear-gradient(135deg,#e8eef8,#e6f5f1)">
               <component :is="sp.icon" :size="15" style="color:#1e4d9a" />
@@ -592,12 +658,18 @@ const mockQueue = [
         </div>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div v-for="(step, idx) in steps" :key="step.n"
-               class="relative bg-white rounded-3xl p-8 border text-center group hover:-translate-y-1 transition-all hover:shadow-xl reveal"
+               class="relative bg-white rounded-3xl overflow-hidden border text-center group hover:-translate-y-1 transition-all hover:shadow-xl reveal"
+               :class="`delay-${idx + 1}`"
                style="border-color:#e2e8f4">
-            <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-5 text-xl font-black" style="background:linear-gradient(135deg,#1e4d9a,#2daa8a);color:white">{{ step.n }}</div>
-            <h3 class="text-base font-bold mb-2.5" style="color:#0b1120">{{ step.title }}</h3>
-            <p class="text-sm leading-relaxed" style="color:#64748b">{{ step.desc }}</p>
-            <div v-if="idx < 2" class="hidden md:flex absolute -right-3 top-12 w-6 h-6 rounded-full items-center justify-center z-10" style="background:#e8eef8">
+            <div class="overflow-hidden" style="background:linear-gradient(135deg,#f0f7ff,#eafaf5)">
+              <img :src="step.img" :alt="step.title" class="w-full h-40 object-cover transition-transform duration-500 group-hover:scale-110" />
+            </div>
+            <div class="p-8 pt-6">
+              <div class="inline-flex items-center justify-center w-10 h-10 rounded-xl mb-4 text-sm font-black" style="background:linear-gradient(135deg,#1e4d9a,#2daa8a);color:white">{{ step.n }}</div>
+              <h3 class="text-base font-bold mb-2.5" style="color:#0b1120">{{ step.title }}</h3>
+              <p class="text-sm leading-relaxed" style="color:#64748b">{{ step.desc }}</p>
+            </div>
+            <div v-if="idx < 2" class="hidden md:flex absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full items-center justify-center z-10" style="background:#e8eef8">
               <ChevronRight :size="14" style="color:#1e4d9a" />
             </div>
           </div>
@@ -608,18 +680,26 @@ const mockQueue = [
     <!-- ── ONDE ATUAMOS ───────────────────────────── -->
     <section id="onde-atuamos" class="py-24 px-4 sm:px-6" style="background:#ffffff">
       <div class="max-w-5xl mx-auto text-center">
-        <span class="inline-block text-xs font-bold px-3 py-1.5 rounded-full mb-4 uppercase tracking-wide" style="background:#e8eef8;color:#1e4d9a">Onde atuamos</span>
-        <h2 class="text-3xl sm:text-4xl font-extrabold mb-4 tracking-tight" style="color:#0b1120">Instalamos e operamos<br>onde você precisar</h2>
-        <p class="text-lg max-w-2xl mx-auto mb-12" style="color:#64748b">Estrutura fixa na sua unidade ou atendimento itinerante — adaptamos o serviço ao seu modelo de operarção.</p>
+        <div class="reveal">
+          <span class="inline-block text-xs font-bold px-3 py-1.5 rounded-full mb-4 uppercase tracking-wide" style="background:#e8eef8;color:#1e4d9a">Onde atuamos</span>
+          <h2 class="text-3xl sm:text-4xl font-extrabold mb-4 tracking-tight" style="color:#0b1120">Instalamos e operamos<br>onde você precisar</h2>
+          <p class="text-lg max-w-2xl mx-auto mb-12" style="color:#64748b">Estrutura fixa na sua unidade ou atendimento itinerante — adaptamos o serviço ao seu modelo de operarção.</p>
+        </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          <div v-for="local in where" :key="local.title"
-               class="p-8 rounded-3xl border text-left transition-all hover:-translate-y-1 hover:shadow-lg"
+          <div v-for="(local, i) in where" :key="local.title"
+               class="rounded-3xl border text-left overflow-hidden transition-all hover:-translate-y-1 hover:shadow-lg reveal group"
+               :class="`delay-${(i % 4) + 1}`"
                style="border-color:#e2e8f4">
-            <div class="w-12 h-12 rounded-2xl flex items-center justify-center mb-5" :style="`background:${local.bg}`">
-              <component :is="local.icon" :size="22" :style="`color:${local.c}`" />
+            <div class="overflow-hidden" style="background:linear-gradient(135deg,#f0f7ff,#eafaf5)">
+              <img :src="local.img" :alt="local.title" class="w-full h-32 object-cover transition-transform duration-500 group-hover:scale-110" />
             </div>
-            <h3 class="font-bold text-base mb-2" style="color:#0b1120">{{ local.title }}</h3>
-            <p class="text-sm leading-relaxed" style="color:#64748b">{{ local.desc }}</p>
+            <div class="p-6">
+              <div class="w-10 h-10 rounded-xl flex items-center justify-center mb-4 -mt-10 relative shadow-md" :style="`background:${local.bg}`">
+                <component :is="local.icon" :size="18" :style="`color:${local.c}`" />
+              </div>
+              <h3 class="font-bold text-base mb-2" style="color:#0b1120">{{ local.title }}</h3>
+              <p class="text-sm leading-relaxed" style="color:#64748b">{{ local.desc }}</p>
+            </div>
           </div>
         </div>
       </div>
@@ -627,7 +707,7 @@ const mockQueue = [
 
     <!-- ── NOSSA EQUIPE ───────────────────────────── -->
     <section id="equipe" class="py-24 px-4 sm:px-6" style="background:#f8faff">
-      <div class="max-w-5xl mx-auto text-center">
+      <div class="max-w-5xl mx-auto text-center reveal">
         <span class="inline-block text-xs font-bold px-3 py-1.5 rounded-full mb-4 uppercase tracking-wide" style="background:#e6f5f1;color:#1a6b56">Nossa Equipe</span>
         <h2 class="text-3xl sm:text-4xl font-extrabold mb-4 tracking-tight" style="color:#0b1120">Médicos que fazem a diferença</h2>
         <p class="text-lg max-w-xl mx-auto mb-12" style="color:#64748b">Profissionais experientes, com sólida formação em Atenção Primária e Telemedicina.</p>
@@ -656,8 +736,15 @@ const mockQueue = [
 
     <!-- ── CONTATO ────────────────────────────────── -->
     <section id="contato" class="py-28 px-4 sm:px-6 relative overflow-hidden" style="background:linear-gradient(135deg,#080f1e 0%,#0e2550 45%,#0b3326 100%)">
+      <img
+        src="/bg-contato.png"
+        alt=""
+        aria-hidden="true"
+        class="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
+        style="opacity:0.35;mix-blend-mode:screen"
+      />
       <div style="position:absolute;width:600px;height:600px;background:radial-gradient(circle,rgba(45,170,138,0.2) 0%,transparent 65%);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none" />
-      <div class="relative max-w-3xl mx-auto text-center">
+      <div class="relative max-w-3xl mx-auto text-center reveal">
         <!-- Logo no CTA -->
         <img src="/logo.png" alt="Central SóMedicos" style="height:90px;width:auto;margin:0 auto 2rem;filter:brightness(0) invert(1);opacity:0.9" />
         <h2 class="text-3xl sm:text-4xl font-extrabold text-white mb-5 tracking-tight">
@@ -688,6 +775,20 @@ const mockQueue = [
         </p>
       </div>
     </section>
+
+    <!-- ── BOTÃO VOLTAR AO TOPO ────────────────────── -->
+    <Transition name="fade-up">
+      <button
+        v-if="showBackToTop"
+        type="button"
+        class="fixed bottom-6 right-6 z-50 w-12 h-12 rounded-2xl flex items-center justify-center transition-all hover:scale-110 hover:shadow-xl"
+        style="background:linear-gradient(135deg,#1e4d9a,#2daa8a);box-shadow:0 4px 20px rgba(30,77,154,0.35)"
+        aria-label="Voltar ao topo"
+        @click="scrollToTop"
+      >
+        <ChevronRight :size="20" style="color:white;transform:rotate(-90deg)" />
+      </button>
+    </Transition>
 
     <!-- ── FOOTER ──────────────────────────────────── -->
     <footer class="pt-14 pb-8 px-4 sm:px-6" style="background:#06101f;border-top:1px solid rgba(255,255,255,0.06)">
@@ -769,6 +870,11 @@ const mockQueue = [
 </template>
 
 <style scoped>
+/* Combo de fontes: DM Sans nos títulos (mais personalidade), Inter no corpo (leitura) */
+h1, h2 {
+  font-family: 'DM Sans', 'Inter', sans-serif;
+}
+
 @keyframes float {
   0%, 100% { transform: translateY(0);     }
   50%       { transform: translateY(-14px); }
@@ -831,4 +937,30 @@ const mockQueue = [
 .delay-2 { transition-delay: 0.20s; }
 .delay-3 { transition-delay: 0.30s; }
 .delay-4 { transition-delay: 0.40s; }
+
+.fade-up-enter-active,
+.fade-up-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.fade-up-enter-from,
+.fade-up-leave-to {
+  opacity: 0;
+  transform: translateY(12px);
+}
+</style>
+
+<style>
+/* Global — precisa alcançar <html>/<body>.
+   overflow-x aqui (não no wrapper interno) evita quebrar o position:sticky
+   da navbar — qualquer overflow != visible num ancestral desativa sticky. */
+html {
+  scroll-behavior: smooth;
+  overflow-x: hidden;
+}
+body {
+  overflow-x: hidden;
+}
+section[id] {
+  scroll-margin-top: 4rem;
+}
 </style>
