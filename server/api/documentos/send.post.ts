@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer'
+import { serverSupabaseClient } from '#supabase/server'
 
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
@@ -14,7 +15,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'documentoId e canal são obrigatórios' })
   }
 
-  const supabase = useSupabaseClient(event)
+  const supabase = await serverSupabaseClient(event)
 
   // Busca o documento com link de acesso e tipo
   const { data: doc, error: docError } = await supabase

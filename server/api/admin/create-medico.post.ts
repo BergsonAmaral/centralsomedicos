@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { serverSupabaseClient } from '#supabase/server'
 
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
@@ -12,7 +13,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // Verifica se o chamador é admin autenticado
-  const callerClient = useSupabaseClient(event)
+  const callerClient = await serverSupabaseClient(event)
   const { data: { user }, error: authError } = await callerClient.auth.getUser()
   if (authError || !user) {
     throw createError({ statusCode: 401, message: 'Não autenticado' })
