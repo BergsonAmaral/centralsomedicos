@@ -251,6 +251,7 @@ onUnmounted(() => {
 </script>
 
 <template>
+  <div>
   <!-- Custom cursor (desktop only) -->
   <div class="cur-dot" :class="{ hover: cursorHover }" :style="`left:${cursorX}px;top:${cursorY}px`" />
   <div class="cur-ring" :class="{ hover: cursorHover }" :style="`left:${ringX}px;top:${ringY}px`" />
@@ -677,6 +678,7 @@ onUnmounted(() => {
       </button>
     </Transition>
 
+  </div>
   </div>
 </template>
 

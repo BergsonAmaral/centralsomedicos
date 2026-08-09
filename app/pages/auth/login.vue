@@ -67,7 +67,6 @@ async function entrar() {
       <!-- Logo -->
       <div class="flex flex-col items-center mb-8">
         <img src="/logo.png" alt="Central SóMedicos" class="w-auto object-contain" style="height:120px" />
-        <p class="text-xs text-slate-500 mt-3">Plataforma de teleconsultas SUS</p>
       </div>
 
       <!-- Card -->
