@@ -243,6 +243,14 @@ onMounted(async () => {
   onScroll()
 })
 
+/* Stop the cursor RAF loop the instant we start leaving this route —
+   otherwise its continuous re-renders can stall the page-leave transition. */
+onBeforeRouteLeave(() => {
+  window.removeEventListener('scroll', onScroll)
+  if (rafId) cancelAnimationFrame(rafId)
+  if (vitalInterval) clearInterval(vitalInterval)
+})
+
 onUnmounted(() => {
   window.removeEventListener('scroll', onScroll)
   if (rafId) cancelAnimationFrame(rafId)
@@ -251,7 +259,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div>
+  <div class="somedicos-landing">
   <!-- Custom cursor (desktop only) -->
   <div class="cur-dot" :class="{ hover: cursorHover }" :style="`left:${cursorX}px;top:${cursorY}px`" />
   <div class="cur-ring" :class="{ hover: cursorHover }" :style="`left:${ringX}px;top:${ringY}px`" />
@@ -688,10 +696,9 @@ onUnmounted(() => {
 
 html {
   scroll-behavior: smooth;
-  overflow-x: clip;
   font-size: 16px;
 }
-body {
+.somedicos-landing {
   background: #F2F0EA;
   color: #0A0C09;
   font-family: 'DM Sans', 'Inter', sans-serif;
@@ -701,7 +708,7 @@ body {
 }
 
 @media (hover: none) {
-  body { cursor: auto; }
+  .somedicos-landing { cursor: auto; }
   .cur-dot, .cur-ring { display: none; }
 }
 
