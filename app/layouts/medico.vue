@@ -32,10 +32,10 @@ async function logout() {
 </script>
 
 <template>
-  <div class="flex h-screen overflow-hidden" style="background:#f8fafc">
+  <div class="flex h-screen overflow-hidden" style="background:var(--color-bg)">
 
     <!-- ── SIDEBAR DESKTOP ── -->
-    <aside class="hidden lg:flex flex-col w-56 shrink-0" style="background:#0c1525;border-right:1px solid #1e2d4a">
+    <aside class="hidden lg:flex flex-col w-56 shrink-0" style="background:#0A0C09;border-right:1px solid rgba(255,255,255,0.10)">
 
       <!-- Logo -->
       <div class="px-4 pt-5 pb-4">
@@ -45,7 +45,7 @@ async function logout() {
         <p class="text-[10px] font-medium text-center mt-1.5 uppercase tracking-widest" style="color:#3dc4a4">Painel Médico</p>
       </div>
 
-      <div class="mx-3 mb-2" style="height:1px;background:#1e2d4a" />
+      <div class="mx-3 mb-2" style="height:1px;background:rgba(255,255,255,0.10)" />
 
       <!-- Nav -->
       <nav class="flex-1 px-2 py-1 space-y-0.5">
@@ -56,7 +56,7 @@ async function logout() {
           class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium relative"
           :style="isActive(item.to)
             ? 'background:rgba(45,170,138,0.15);color:#3dc4a4'
-            : 'color:#4d7da880'"
+            : 'color:rgba(255,255,255,0.5)'"
         >
           <span
             v-if="isActive(item.to)"
@@ -64,16 +64,16 @@ async function logout() {
             style="background:#2daa8a"
           />
           <component :is="item.icon" :size="15"
-            :style="isActive(item.to) ? 'color:#2daa8a' : 'color:#2d4a6a'" />
+            :style="isActive(item.to) ? 'color:#2daa8a' : 'color:rgba(255,255,255,0.4)'" />
           {{ item.label }}
         </NuxtLink>
       </nav>
 
       <!-- Perfil -->
       <div class="mt-auto">
-        <div class="mx-3 mb-2" style="height:1px;background:#1e2d4a" />
+        <div class="mx-3 mb-2" style="height:1px;background:rgba(255,255,255,0.10)" />
         <div class="px-2 pb-4 space-y-1">
-          <div class="flex items-center gap-2.5 px-3 py-2.5 rounded-lg" style="background:#1e2d4a">
+          <div class="flex items-center gap-2.5 px-3 py-2.5 rounded-lg" style="background:rgba(255,255,255,0.10)">
             <UiAvatar :src="authStore.medicoData?.foto_url" :name="authStore.profile?.nome" size="sm" />
             <div class="min-w-0 flex-1">
               <p class="text-xs font-semibold text-white truncate">{{ authStore.profile?.nome }}</p>
@@ -81,7 +81,7 @@ async function logout() {
             </div>
           </div>
           <button
-            class="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors hover:bg-[#1e2d4a]"
+            class="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors hover:bg-[rgba(255,255,255,0.10)]"
             style="color:#f87171"
             @click="logout"
           >
@@ -102,8 +102,8 @@ async function logout() {
     <!-- ── SIDEBAR MOBILE ── -->
     <Transition name="slide-right">
       <aside v-if="sidebarOpen" class="fixed inset-y-0 left-0 z-50 w-56 flex flex-col lg:hidden"
-             style="background:#0c1525">
-        <div class="px-4 py-4 flex items-center justify-between" style="border-bottom:1px solid #1e2d4a">
+             style="background:#0A0C09">
+        <div class="px-4 py-4 flex items-center justify-between" style="border-bottom:1px solid rgba(255,255,255,0.10)">
           <div class="flex items-center gap-2.5">
             <div class="bg-white/95 rounded-lg px-2 py-1">
               <img src="/logo.png" alt="Central SóMedicos" class="h-12 w-auto" />
@@ -119,7 +119,7 @@ async function logout() {
             :key="item.to"
             :to="item.to"
             class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium"
-            :style="isActive(item.to) ? 'background:rgba(45,170,138,0.15);color:#3dc4a4' : 'color:#2d4a6a'"
+            :style="isActive(item.to) ? 'background:rgba(45,170,138,0.15);color:#3dc4a4' : 'color:rgba(255,255,255,0.4)'"
             @click="sidebarOpen = false"
           >
             <component :is="item.icon" :size="15" />
@@ -138,7 +138,7 @@ async function logout() {
     <!-- ── CONTEÚDO ── -->
     <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
       <header class="lg:hidden flex items-center gap-3 px-4 py-3 bg-white"
-              style="border-bottom:1px solid #e2e8f0;box-shadow:0 1px 3px rgba(15,23,42,0.05)">
+              style="border-bottom:1px solid var(--color-border);box-shadow:0 1px 3px rgba(15,23,42,0.05)">
         <button class="text-slate-400 hover:text-slate-700 transition-colors" @click="sidebarOpen = true">
           <Menu :size="20" />
         </button>

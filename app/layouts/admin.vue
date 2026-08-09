@@ -74,7 +74,7 @@ async function logout() {
     <!-- ── SIDEBAR DESKTOP ── -->
     <aside
       class="hidden lg:flex flex-col w-60 shrink-0"
-      style="background:linear-gradient(180deg,#091526 0%,#0d1f3b 100%);border-right:1px solid #162035"
+      style="background:linear-gradient(180deg,#0A0C09 0%,#14140f 100%);border-right:1px solid rgba(255,255,255,0.08)"
     >
       <!-- Logo -->
       <div class="px-4 pt-6 pb-4">
@@ -85,7 +85,7 @@ async function logout() {
       </div>
 
       <!-- Divisor -->
-      <div class="mx-4 mb-3" style="height:1px;background:linear-gradient(90deg,transparent,#1e3a5f,transparent)" />
+      <div class="mx-4 mb-3" style="height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.12),transparent)" />
 
       <!-- Nav -->
       <nav class="flex-1 px-3 py-1 space-y-0.5 overflow-y-auto">
@@ -95,10 +95,10 @@ async function logout() {
           :key="item.to"
           :to="item.to"
           class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium relative transition-all"
-          :style="isActive(item.to) ? 'background:rgba(45,170,138,0.16);color:#4dd9be' : 'color:#7099bc'"
+          :style="isActive(item.to) ? 'background:rgba(45,170,138,0.16);color:#7de8d0' : 'color:rgba(255,255,255,0.55)'"
         >
           <span v-if="isActive(item.to)" class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full" style="background:#2daa8a;box-shadow:0 0 8px rgba(45,170,138,0.6)" />
-          <component :is="item.icon" :size="16" :style="isActive(item.to) ? 'color:#2daa8a' : 'color:#4a7a9b'" />
+          <component :is="item.icon" :size="16" :style="isActive(item.to) ? 'color:#2daa8a' : 'color:rgba(255,255,255,0.4)'" />
           <span>{{ item.label }}</span>
         </NuxtLink>
 
@@ -106,27 +106,27 @@ async function logout() {
         <div>
           <button
             class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all relative"
-            :style="isCadastroActive ? 'background:rgba(45,170,138,0.16);color:#4dd9be' : 'color:#7099bc'"
+            :style="isCadastroActive ? 'background:rgba(45,170,138,0.16);color:#7de8d0' : 'color:rgba(255,255,255,0.55)'"
             @click="cadastrosOpen = !cadastrosOpen"
           >
             <span v-if="isCadastroActive" class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full" style="background:#2daa8a;box-shadow:0 0 8px rgba(45,170,138,0.6)" />
-            <UserCheck :size="16" :style="isCadastroActive ? 'color:#2daa8a' : 'color:#4a7a9b'" />
+            <UserCheck :size="16" :style="isCadastroActive ? 'color:#2daa8a' : 'color:rgba(255,255,255,0.4)'" />
             <span class="flex-1 text-left">Cadastros</span>
             <ChevronDown
               :size="14"
               class="transition-transform duration-200"
-              :style="(cadastrosOpen ? 'transform:rotate(180deg);' : '') + (isCadastroActive ? 'color:#2daa8a' : 'color:#4a7a9b')"
+              :style="(cadastrosOpen ? 'transform:rotate(180deg);' : '') + (isCadastroActive ? 'color:#2daa8a' : 'color:rgba(255,255,255,0.4)')"
             />
           </button>
-          <div v-if="cadastrosOpen" class="ml-3 mt-0.5 space-y-0.5 border-l pl-3" style="border-color:#1e3a5f">
+          <div v-if="cadastrosOpen" class="ml-3 mt-0.5 space-y-0.5 border-l pl-3" style="border-color:rgba(255,255,255,0.12)">
             <NuxtLink
               v-for="item in cadastroItems"
               :key="item.to"
               :to="item.to"
               class="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium relative transition-all"
-              :style="isActive(item.to) ? 'background:rgba(45,170,138,0.12);color:#4dd9be' : 'color:#7099bc'"
+              :style="isActive(item.to) ? 'background:rgba(45,170,138,0.12);color:#7de8d0' : 'color:rgba(255,255,255,0.55)'"
             >
-              <component :is="item.icon" :size="15" :style="isActive(item.to) ? 'color:#2daa8a' : 'color:#4a7a9b'" />
+              <component :is="item.icon" :size="15" :style="isActive(item.to) ? 'color:#2daa8a' : 'color:rgba(255,255,255,0.4)'" />
               <span>{{ item.label }}</span>
             </NuxtLink>
           </div>
@@ -134,32 +134,32 @@ async function logout() {
 
         <!-- Bottom items -->
         <div class="mx-1 mt-3 mb-1 flex items-center gap-2">
-          <div class="flex-1" style="height:1px;background:linear-gradient(90deg,transparent,#1e3a5f,transparent)" />
+          <div class="flex-1" style="height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.12),transparent)" />
           <span class="text-[9px] font-bold uppercase tracking-widest px-1" style="color:rgba(255,255,255,0.2)">Administrativo</span>
-          <div class="flex-1" style="height:1px;background:linear-gradient(90deg,#1e3a5f,transparent)" />
+          <div class="flex-1" style="height:1px;background:linear-gradient(90deg,rgba(255,255,255,0.12),transparent)" />
         </div>
         <NuxtLink
           v-for="item in navItemsBottom"
           :key="item.to"
           :to="item.to"
           class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium relative transition-all"
-          :style="isActive(item.to) ? 'background:rgba(45,170,138,0.16);color:#4dd9be' : 'color:#7099bc'"
+          :style="isActive(item.to) ? 'background:rgba(45,170,138,0.16);color:#7de8d0' : 'color:rgba(255,255,255,0.55)'"
         >
           <span v-if="isActive(item.to)" class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full" style="background:#2daa8a;box-shadow:0 0 8px rgba(45,170,138,0.6)" />
-          <component :is="item.icon" :size="16" :style="isActive(item.to) ? 'color:#2daa8a' : 'color:#4a7a9b'" />
+          <component :is="item.icon" :size="16" :style="isActive(item.to) ? 'color:#2daa8a' : 'color:rgba(255,255,255,0.4)'" />
           <span>{{ item.label }}</span>
         </NuxtLink>
       </nav>
 
       <!-- Perfil -->
       <div class="mt-auto">
-        <div class="mx-4 mb-3" style="height:1px;background:linear-gradient(90deg,transparent,#1e3a5f,transparent)" />
+        <div class="mx-4 mb-3" style="height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.12),transparent)" />
         <div class="px-3 pb-5 space-y-1.5">
-          <div class="flex items-center gap-2.5 px-3 py-2.5 rounded-xl" style="background:rgba(255,255,255,0.06);border:1px solid #1e3050">
+          <div class="flex items-center gap-2.5 px-3 py-2.5 rounded-xl" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.14)">
             <UiAvatar :name="authStore.profile?.nome" size="sm" />
             <div class="min-w-0 flex-1">
               <p class="text-xs font-semibold text-white truncate">{{ authStore.profile?.nome }}</p>
-              <p class="text-[10px] font-medium" style="color:#4d8faa">Administrador</p>
+              <p class="text-[10px] font-medium" style="color:rgba(255,255,255,0.4)">Administrador</p>
             </div>
           </div>
           <button
@@ -191,15 +191,15 @@ async function logout() {
       <aside
         v-if="sidebarOpen"
         class="fixed inset-y-0 left-0 z-50 w-60 flex flex-col lg:hidden"
-        style="background:linear-gradient(180deg,#091526 0%,#0d1f3b 100%)"
+        style="background:linear-gradient(180deg,#0A0C09 0%,#14140f 100%)"
       >
-        <div class="px-4 py-4 flex items-center justify-between" style="border-bottom:1px solid #162035">
+        <div class="px-4 py-4 flex items-center justify-between" style="border-bottom:1px solid rgba(255,255,255,0.08)">
           <div class="flex items-center gap-2.5">
             <div class="bg-white/95 rounded-lg px-2 py-1">
               <img src="/logo.png" alt="Central SóMedicos" class="h-12 w-auto" />
             </div>
           </div>
-          <button class="text-[#4a7a9b] hover:text-white transition-colors" @click="sidebarOpen = false">
+          <button class="text-white/40 hover:text-white transition-colors" @click="sidebarOpen = false">
             <X :size="18" />
           </button>
         </div>
@@ -209,11 +209,11 @@ async function logout() {
             :key="item.to"
             :to="item.to"
             class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium relative"
-            :style="isActive(item.to) ? 'background:rgba(45,170,138,0.16);color:#4dd9be' : 'color:#7099bc'"
+            :style="isActive(item.to) ? 'background:rgba(45,170,138,0.16);color:#7de8d0' : 'color:rgba(255,255,255,0.55)'"
             @click="sidebarOpen = false"
           >
             <span v-if="isActive(item.to)" class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full" style="background:#2daa8a" />
-            <component :is="item.icon" :size="16" :style="isActive(item.to) ? 'color:#2daa8a' : 'color:#4a7a9b'" />
+            <component :is="item.icon" :size="16" :style="isActive(item.to) ? 'color:#2daa8a' : 'color:rgba(255,255,255,0.4)'" />
             {{ item.label }}
           </NuxtLink>
 
@@ -221,24 +221,24 @@ async function logout() {
           <div>
             <button
               class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium relative transition-all"
-              :style="isCadastroActive ? 'background:rgba(45,170,138,0.16);color:#4dd9be' : 'color:#7099bc'"
+              :style="isCadastroActive ? 'background:rgba(45,170,138,0.16);color:#7de8d0' : 'color:rgba(255,255,255,0.55)'"
               @click="cadastrosOpen = !cadastrosOpen"
             >
               <span v-if="isCadastroActive" class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full" style="background:#2daa8a" />
-              <UserCheck :size="16" :style="isCadastroActive ? 'color:#2daa8a' : 'color:#4a7a9b'" />
+              <UserCheck :size="16" :style="isCadastroActive ? 'color:#2daa8a' : 'color:rgba(255,255,255,0.4)'" />
               <span class="flex-1 text-left">Cadastros</span>
-              <ChevronDown :size="14" class="transition-transform duration-200" :style="(cadastrosOpen ? 'transform:rotate(180deg);' : '') + (isCadastroActive ? 'color:#2daa8a' : 'color:#4a7a9b')" />
+              <ChevronDown :size="14" class="transition-transform duration-200" :style="(cadastrosOpen ? 'transform:rotate(180deg);' : '') + (isCadastroActive ? 'color:#2daa8a' : 'color:rgba(255,255,255,0.4)')" />
             </button>
-            <div v-if="cadastrosOpen" class="ml-3 mt-0.5 space-y-0.5 border-l pl-3" style="border-color:#1e3a5f">
+            <div v-if="cadastrosOpen" class="ml-3 mt-0.5 space-y-0.5 border-l pl-3" style="border-color:rgba(255,255,255,0.12)">
               <NuxtLink
                 v-for="item in cadastroItems"
                 :key="item.to"
                 :to="item.to"
                 class="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium relative"
-                :style="isActive(item.to) ? 'background:rgba(45,170,138,0.12);color:#4dd9be' : 'color:#7099bc'"
+                :style="isActive(item.to) ? 'background:rgba(45,170,138,0.12);color:#7de8d0' : 'color:rgba(255,255,255,0.55)'"
                 @click="sidebarOpen = false"
               >
-                <component :is="item.icon" :size="15" :style="isActive(item.to) ? 'color:#2daa8a' : 'color:#4a7a9b'" />
+                <component :is="item.icon" :size="15" :style="isActive(item.to) ? 'color:#2daa8a' : 'color:rgba(255,255,255,0.4)'" />
                 {{ item.label }}
               </NuxtLink>
             </div>
@@ -246,9 +246,9 @@ async function logout() {
 
           <!-- Admin section divider mobile -->
           <div class="mx-1 mt-3 mb-1 flex items-center gap-2">
-            <div class="flex-1" style="height:1px;background:linear-gradient(90deg,transparent,#1e3a5f,transparent)" />
+            <div class="flex-1" style="height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.12),transparent)" />
             <span class="text-[9px] font-bold uppercase tracking-widest px-1" style="color:rgba(255,255,255,0.2)">Administrativo</span>
-            <div class="flex-1" style="height:1px;background:linear-gradient(90deg,#1e3a5f,transparent)" />
+            <div class="flex-1" style="height:1px;background:linear-gradient(90deg,rgba(255,255,255,0.12),transparent)" />
           </div>
 
           <NuxtLink
@@ -256,11 +256,11 @@ async function logout() {
             :key="item.to"
             :to="item.to"
             class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium relative"
-            :style="isActive(item.to) ? 'background:rgba(45,170,138,0.16);color:#4dd9be' : 'color:#7099bc'"
+            :style="isActive(item.to) ? 'background:rgba(45,170,138,0.16);color:#7de8d0' : 'color:rgba(255,255,255,0.55)'"
             @click="sidebarOpen = false"
           >
             <span v-if="isActive(item.to)" class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full" style="background:#2daa8a" />
-            <component :is="item.icon" :size="16" :style="isActive(item.to) ? 'color:#2daa8a' : 'color:#4a7a9b'" />
+            <component :is="item.icon" :size="16" :style="isActive(item.to) ? 'color:#2daa8a' : 'color:rgba(255,255,255,0.4)'" />
             {{ item.label }}
           </NuxtLink>
         </nav>
@@ -290,7 +290,7 @@ async function logout() {
       <!-- Topbar mobile -->
       <header
         class="lg:hidden flex items-center gap-3 px-4 py-3 bg-white"
-        style="border-bottom:1px solid #e2e8f0;box-shadow:0 1px 3px rgba(15,23,42,0.05)"
+        style="border-bottom:1px solid var(--color-border);box-shadow:0 1px 3px rgba(10,12,9,0.05)"
       >
         <button class="text-slate-400 hover:text-slate-700 transition-colors" @click="sidebarOpen = true">
           <Menu :size="20" />
@@ -307,7 +307,7 @@ async function logout() {
 
 <style scoped>
 /* Hover nos itens da nav sem JS */
-nav a:not([style*="color:#4dd9be"]):hover {
+nav a:not([style*="color:#7de8d0"]):hover {
   background: rgba(255,255,255,0.07);
   color: #a8c8e0;
 }

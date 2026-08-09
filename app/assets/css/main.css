@@ -6,33 +6,33 @@
    Paleta alinhada à logo: navy + teal
    ============================================= */
 @theme {
-  /* Fontes */
+  /* Fontes — mesma dupla da landing */
   --font-sans: 'Inter', sans-serif;
-  --font-heading: 'Inter', sans-serif;
+  --font-heading: 'DM Sans', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
-  /* Cores customizadas */
-  --color-bg: #f4f7fb;
+  /* Cores customizadas — paleta editorial da landing (creme + quase-preto + verde-água) */
+  --color-bg: #F2F0EA;
   --color-surface: #ffffff;
-  --color-surface-2: #eef2f8;
-  --color-border: #dce3ef;
-  --color-border-light: #eef2f8;
+  --color-surface-2: #EAE7DE;
+  --color-border: rgba(10,12,9,0.12);
+  --color-border-light: rgba(10,12,9,0.07);
 
-  /* Navy — cor primária da logo */
+  /* Navy — mantido como acento secundário/informativo (badges, etc.) */
   --color-blue: #1e4d9a;
   --color-blue-light: #2d62bc;
   --color-blue-pale: #e8eef8;
   --color-blue-dark: #163c7d;
 
-  /* Teal — cor do ícone da logo */
+  /* Teal — cor de acento principal, igual à landing */
   --color-green: #2daa8a;
   --color-green-light: #3dc4a4;
   --color-green-pale: #e6f5f1;
   --color-green-dark: #228a6e;
 
-  --color-text: #0f172a;
-  --color-text-muted: #64748b;
-  --color-text-dim: #94a3b8;
+  --color-text: #0A0C09;
+  --color-text-muted: #767670;
+  --color-text-dim: #a3a199;
 
   --color-danger: #dc2626;
   --color-warning: #d97706;
@@ -43,27 +43,27 @@
    VARIÁVEIS CSS GLOBAIS
    ============================================= */
 :root {
-  --color-bg: #f4f7fb;
+  --color-bg: #F2F0EA;
   --color-surface: #ffffff;
-  --color-surface-2: #eef2f8;
-  --color-border: #dce3ef;
-  --color-border-light: #eef2f8;
+  --color-surface-2: #EAE7DE;
+  --color-border: rgba(10,12,9,0.12);
+  --color-border-light: rgba(10,12,9,0.07);
 
-  /* Navy — logo */
+  /* Navy — acento secundário */
   --color-blue: #1e4d9a;
   --color-blue-light: #2d62bc;
   --color-blue-pale: #e8eef8;
   --color-blue-dark: #163c7d;
 
-  /* Teal — logo */
+  /* Teal — acento principal, igual à landing */
   --color-green: #2daa8a;
   --color-green-light: #3dc4a4;
   --color-green-pale: #e6f5f1;
   --color-green-dark: #228a6e;
 
-  --color-text: #0f172a;
-  --color-text-muted: #64748b;
-  --color-text-dim: #94a3b8;
+  --color-text: #0A0C09;
+  --color-text-muted: #767670;
+  --color-text-dim: #a3a199;
 
   --color-danger: #dc2626;
   --color-warning: #d97706;
@@ -86,7 +86,7 @@
 }
 
 html {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-sans);
   color: var(--color-text);
   background-color: var(--color-bg);
   -webkit-font-smoothing: antialiased;
@@ -100,7 +100,7 @@ body {
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-heading);
   font-weight: 700;
   color: var(--color-text);
 }
@@ -119,7 +119,7 @@ a, button, input, select, textarea {
 /* Fundo com textura pontilhada muito sutil */
 .content-dots {
   background-color: var(--color-bg);
-  background-image: radial-gradient(rgba(30,77,154,0.07) 1px, transparent 1px);
+  background-image: radial-gradient(rgba(10,12,9,0.08) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
