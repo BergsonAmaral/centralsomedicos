@@ -59,24 +59,18 @@ async function entrar() {
 </script>
 
 <template>
-  <div
-    class="min-h-screen flex items-center justify-center px-4 py-10"
-    style="background: linear-gradient(135deg, #f4f7fb 0%, #e8eef8 50%, #e6f5f1 100%)"
-  >
+  <div class="login-page min-h-screen flex items-center justify-center px-4 py-10">
     <div class="w-full max-w-md">
       <!-- Logo -->
       <div class="flex flex-col items-center mb-8">
-        <img src="/logo.png" alt="Central SóMedicos" class="w-auto object-contain" style="height:120px" />
+        <img src="/logo.png" alt="Central SóMedicos" class="w-auto object-contain" style="height:110px" />
       </div>
 
       <!-- Card -->
-      <div
-        class="bg-white rounded-2xl p-7"
-        style="border: 1px solid rgba(226,232,240,0.8); box-shadow: 0 20px 60px -15px rgba(15,23,42,0.15), 0 4px 12px -4px rgba(15,23,42,0.05)"
-      >
-        <div class="mb-5">
-          <h2 class="text-lg font-semibold text-slate-900">Bem-vindo de volta</h2>
-          <p class="text-slate-500 text-sm mt-0.5">Entre com suas credenciais</p>
+      <div class="login-card">
+        <div class="mb-6">
+          <h2 class="login-title">Bem-vindo de volta</h2>
+          <p class="login-subtitle">Entre com suas credenciais</p>
         </div>
 
         <form class="space-y-4" @submit.prevent="entrar">
@@ -92,9 +86,9 @@ async function entrar() {
 
           <!-- E-mail -->
           <div class="space-y-1.5">
-            <label class="text-xs font-semibold text-slate-700 uppercase tracking-wide">E-mail</label>
+            <label class="login-label">E-mail</label>
             <div class="relative">
-              <Mail :size="15" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10" />
+              <Mail :size="15" class="input-icon" />
               <input
                 v-model="email"
                 type="email"
@@ -107,9 +101,9 @@ async function entrar() {
 
           <!-- Senha -->
           <div class="space-y-1.5">
-            <label class="text-xs font-semibold text-slate-700 uppercase tracking-wide">Senha</label>
+            <label class="login-label">Senha</label>
             <div class="relative">
-              <Lock :size="15" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10" />
+              <Lock :size="15" class="input-icon" />
               <input
                 v-model="senha"
                 type="password"
@@ -124,8 +118,7 @@ async function entrar() {
           <button
             type="submit"
             :disabled="carregando"
-            class="w-full py-2.5 rounded-lg text-sm font-semibold text-white mt-2 inline-flex items-center justify-center gap-2 login-btn"
-            style="background: linear-gradient(135deg, #1e4d9a, #2daa8a)"
+            class="login-btn"
           >
             <template v-if="!carregando">Entrar</template>
             <template v-else>
@@ -139,15 +132,58 @@ async function entrar() {
         </form>
       </div>
 
-      <p class="text-center text-xs text-slate-500 mt-6">
+      <p class="login-footer">
         Acesso restrito a profissionais cadastrados ·
-        <span class="text-slate-400">Suporte via administração</span>
+        <span class="login-footer-dim">Suporte via administração</span>
       </p>
     </div>
   </div>
 </template>
 
 <style scoped>
+.login-page {
+  background: #F2F0EA;
+  font-family: 'Inter', sans-serif;
+}
+
+.login-card {
+  background: #fff;
+  border-radius: 1.25rem;
+  padding: 1.75rem;
+  border: 1px solid rgba(10,12,9,0.08);
+  box-shadow: 0 20px 50px -20px rgba(10,12,9,0.12), 0 4px 12px -4px rgba(10,12,9,0.04);
+}
+
+.login-title {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #0A0C09;
+}
+.login-subtitle {
+  color: #767670;
+  font-size: 0.8125rem;
+  margin-top: 0.15rem;
+}
+
+.login-label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #0A0C09;
+}
+
+.input-icon {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #a3a199;
+  pointer-events: none;
+  z-index: 10;
+}
+
 .input-base {
   width: 100%;
   padding-top: 0.625rem;
@@ -155,27 +191,45 @@ async function entrar() {
   padding-left: 2.25rem;
   padding-right: 0.875rem;
   font-size: 0.875rem;
-  border-radius: 0.5rem;
-  border: 1px solid #e2e8f0;
-  background: #f8fafc;
-  color: #0f172a;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(10,12,9,0.12);
+  background: #F9F8F4;
+  color: #0A0C09;
   outline: none;
   transition: border-color 200ms, box-shadow 200ms;
 }
-.input-base::placeholder { color: #94a3b8; }
+.input-base::placeholder { color: #a3a199; }
 .input-base:focus {
   border-color: #2daa8a;
-  box-shadow: 0 0 0 3px rgba(45,170,138,0.12);
+  box-shadow: 0 0 0 3px rgba(45,170,138,0.14);
   background: white;
 }
 .input-base:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .login-btn {
-  box-shadow: 0 4px 20px rgba(45,170,138,0.3);
-  transition: box-shadow 200ms ease;
+  width: 100%;
+  margin-top: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.8rem 1.5rem;
+  border-radius: 100px;
+  background: #2daa8a;
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  transition: opacity 200ms, transform 200ms;
 }
-.login-btn:not(:disabled):hover {
-  box-shadow: 0 8px 28px rgba(45,170,138,0.4);
+.login-btn:not(:disabled):hover { opacity: 0.88; transform: translateY(-1px); }
+.login-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.login-footer {
+  text-align: center;
+  font-size: 0.75rem;
+  color: #767670;
+  margin-top: 1.5rem;
 }
-.login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.login-footer-dim { color: #a3a199; }
 </style>
