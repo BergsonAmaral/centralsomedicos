@@ -17,15 +17,20 @@ export const useAuthStore = defineStore('auth', () => {
   let _loadingPromise: Promise<void> | null = null
 
   async function loadProfile(force = false) {
-    // Cache hit — retorna imediatamente sem rede
-    if (profile.value && !force) return
+    // Usa o user reativo (já em memória, sem chamada de rede)
+    const authUser = user.value
+    if (!authUser) {
+      profile.value = null
+      medicoData.value = null
+      return
+    }
+
+    // Cache hit só é válido se o profile em memória é do usuário logado agora
+    // (evita servir o perfil de uma sessão anterior após trocar de conta)
+    if (profile.value && profile.value.id === authUser.id && !force) return
 
     // Se já há uma carga em andamento, aguarda a mesma promise
     if (_loadingPromise) return _loadingPromise
-
-    // Usa o user reativo (já em memória, sem chamada de rede)
-    const authUser = user.value
-    if (!authUser) return
 
     loading.value = true
     _loadingPromise = (async () => {
@@ -44,6 +49,8 @@ export const useAuthStore = defineStore('auth', () => {
             .eq('user_id', authUser.id)
             .single()
           medicoData.value = med
+        } else {
+          medicoData.value = null
         }
       } finally {
         loading.value = false
@@ -60,15 +67,11 @@ export const useAuthStore = defineStore('auth', () => {
     medicoData.value = null
   }
 
-  // Carrega assim que o user fica disponível (evita espera no middleware)
+  // Recarrega sempre que o usuário autenticado mudar (login, logout ou troca de conta)
   if (import.meta.client) {
-    if (user.value) {
-      loadProfile()
-    } else {
-      const stop = watch(user, (u) => {
-        if (u) { loadProfile(); stop() }
-      })
-    }
+    watch(user, (u, prevU) => {
+      if (u?.id !== prevU?.id) loadProfile(true)
+    }, { immediate: true })
   }
 
   return {

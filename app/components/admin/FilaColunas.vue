@@ -153,6 +153,7 @@ onUnmounted(() => clearInterval(interval))
         </div>
 
         <UiButton
+          v-if="ag.status === 'checkin'"
           variant="success"
           size="sm"
           class="w-full"
@@ -160,6 +161,19 @@ onUnmounted(() => clearInterval(interval))
         >
           <PhoneCall :size="14" /> Encaminhar →
         </UiButton>
+        <div
+          v-else
+          class="w-full text-center text-xs font-semibold py-2 rounded-lg"
+          :style="ag.status === 'em_consulta'
+            ? 'background:#dcfce7;color:#166534'
+            : 'background:#fef9c3;color:#854d0e'"
+        >
+          {{
+            ag.status === 'aguardando_medico' ? 'Chamando médico…'
+            : ag.status === 'aguardando_paciente' ? 'Aguardando paciente entrar…'
+            : 'Em consulta'
+          }}
+        </div>
       </div>
     </div>
 

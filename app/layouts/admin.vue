@@ -16,6 +16,7 @@ import {
   DoorOpen,
   CalendarCheck,
   ChevronDown,
+  Building2,
 } from 'lucide-vue-next'
 import { useAuthStore } from '~/stores/auth'
 
@@ -33,6 +34,7 @@ const navItemsTop = [
 const cadastroItems = [
   { label: 'Médicos', icon: Stethoscope, to: '/admin/medicos' },
   { label: 'Salas', icon: DoorOpen, to: '/admin/salas' },
+  { label: 'Unidades', icon: Building2, to: '/admin/unidades' },
   { label: 'Pacientes', icon: Users2, to: '/admin/pacientes' },
 ]
 

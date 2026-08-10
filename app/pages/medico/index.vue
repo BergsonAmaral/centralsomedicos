@@ -272,43 +272,6 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- Banner: paciente chamado aguardando aceite -->
-      <div
-        v-if="aguardandoAceite"
-        class="rounded-2xl overflow-hidden"
-        style="background:linear-gradient(135deg,#1a1000,#3d2000);border:2px solid #f59e0b"
-      >
-        <div class="px-6 py-4 flex items-center gap-3" style="background:rgba(245,158,11,0.15)">
-          <Bell :size="22" style="color:#fbbf24;animation:bell 0.4s ease infinite alternate;flex-shrink:0" />
-          <div class="flex-1 min-w-0">
-            <p class="text-xs font-bold uppercase tracking-widest" style="color:#fbbf24">Paciente aguardando</p>
-            <p class="font-bold text-white truncate">{{ (aguardandoAceite.pacientes as any)?.nome }}</p>
-            <p class="text-xs" style="color:#fde68a">
-              {{ aguardandoAceite.motivo ?? 'Sem motivo informado' }}
-              <span v-if="aguardandoAceite.sala_slug" class="ml-1 px-1.5 py-0.5 rounded font-bold" style="background:rgba(124,58,237,0.3);color:#c4b5fd">
-                {{ aguardandoAceite.sala_slug }}
-              </span>
-            </p>
-          </div>
-          <div class="flex gap-2 shrink-0">
-            <button
-              type="button"
-              :disabled="processandoAceite"
-              class="px-4 py-2 rounded-lg text-sm font-bold disabled:opacity-50"
-              style="background:rgba(255,255,255,0.1);color:#e2e8f0"
-              @click="recusarPaciente"
-            >Recusar</button>
-            <button
-              type="button"
-              :disabled="processandoAceite"
-              class="px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50"
-              style="background:#16a34a;color:white"
-              @click="aceitarPaciente"
-            ><Check :size="15" /> Aceitar</button>
-          </div>
-        </div>
-      </div>
-
       <!-- Próximos -->
       <div class="bg-white rounded-xl border" style="border-color:var(--color-border)">
         <div class="px-5 py-4 flex items-center justify-between" style="border-bottom:1px solid var(--color-border-light)">

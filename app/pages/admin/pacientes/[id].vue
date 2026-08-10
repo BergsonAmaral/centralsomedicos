@@ -5,7 +5,15 @@ import type { Paciente, Agendamento, Documento, AgendamentoStatus } from '~/type
 definePageMeta({ layout: 'admin', middleware: ['auth', 'role'] })
 
 const supabase = useSupabaseClient()
+const { resolverUrlAssinada } = useDocumentos()
 const route = useRoute()
+
+// pdf_url é um path do storage privado (ou link externo) — resolve uma
+// signed URL de curta duração só na hora de abrir.
+async function abrirDocumento(pathOuLink: string) {
+  const url = await resolverUrlAssinada(pathOuLink)
+  if (url) window.open(url, '_blank', 'noopener,noreferrer')
+}
 const id = route.params.id as string
 const voltar = () => navigateTo('/admin/pacientes')
 
@@ -15,6 +23,7 @@ const documentos = ref<Documento[]>([])
 const carregando = ref(true)
 const salvando = ref(false)
 const novoAgendamentoModal = ref(false)
+const unidades = ref<{ id: string; nome: string }[]>([])
 
 // Filtros do histórico
 const filtroStatus = ref<AgendamentoStatus | ''>('')
@@ -22,7 +31,7 @@ const filtroPeriodo = ref<'todos' | 'futuros' | 'passados' | 'mes'>('todos')
 const buscaMotivo = ref('')
 
 onMounted(async () => {
-  const [pacRes, agRes, docRes] = await Promise.all([
+  const [pacRes, agRes, docRes, uRes] = await Promise.all([
     supabase.from('pacientes').select('*').eq('id', id).single(),
     supabase
       .from('agendamentos')
@@ -34,10 +43,12 @@ onMounted(async () => {
       .select('*, medicos(nome)')
       .eq('paciente_id', id)
       .order('created_at', { ascending: false }),
+    supabase.from('unidades').select('id, nome').eq('ativo', true).order('nome'),
   ])
   paciente.value = pacRes.data
   agendamentos.value = (agRes.data ?? []) as Agendamento[]
   documentos.value = docRes.data ?? []
+  unidades.value = uRes.data ?? []
   carregando.value = false
 })
 
@@ -103,6 +114,7 @@ async function salvarDados() {
     telefone: paciente.value.telefone,
     email: paciente.value.email,
     sus_cartao: paciente.value.sus_cartao,
+    unidade_id: (paciente.value as any).unidade_id || null,
   }).eq('id', id)
   salvando.value = false
 }
@@ -248,6 +260,13 @@ const TIPOS_LABELS: Record<string, string> = {
               {{ paciente.data_nascimento ? new Date(paciente.data_nascimento).toLocaleDateString('pt-BR') : '—' }}
             </p>
           </div>
+          <div>
+            <label class="text-sm font-medium text-[var(--color-text-muted)]">Unidade</label>
+            <select v-model="(paciente as any).unidade_id" class="input-base mt-1">
+              <option :value="null">—</option>
+              <option v-for="u in unidades" :key="u.id" :value="u.id">{{ u.nome }}</option>
+            </select>
+          </div>
         </div>
       </UiCard>
 
@@ -372,9 +391,7 @@ const TIPOS_LABELS: Record<string, string> = {
                 {{ new Date(doc.created_at).toLocaleDateString('pt-BR') }} — {{ (doc.medicos as any)?.nome }}
               </p>
             </div>
-            <a v-if="doc.pdf_url" :href="doc.pdf_url" target="_blank">
-              <UiButton variant="ghost" size="sm">Ver PDF</UiButton>
-            </a>
+            <UiButton v-if="doc.pdf_url" variant="ghost" size="sm" @click="abrirDocumento(doc.pdf_url)">Ver PDF</UiButton>
           </div>
         </div>
       </UiCard>

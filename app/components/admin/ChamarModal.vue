@@ -19,16 +19,43 @@ const paciente = computed(() => props.agendamento.pacientes)
 // Lista de médicos disponíveis
 interface MedicoOpcao { id: string; nome: string; especialidade: string; ativo: boolean; pausado: boolean; sala_slug: string | null }
 const medicos = ref<MedicoOpcao[]>([])
+const ocupadoIds = ref<Set<string>>(new Set())
 const medicoSelecionadoId = ref(props.agendamento.medico_id)
 
-onMounted(async () => {
-  const { data: mData } = await supabase
-    .from('medicos')
-    .select('id, nome, especialidade, ativo, pausado, sala_slug')
-    .eq('ativo', true)
-    .order('nome')
+async function carregarMedicos() {
+  const hoje = new Date()
+  const dataHoje = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`
+
+  const [{ data: mData }, { data: ocupData }] = await Promise.all([
+    supabase.from('medicos').select('id, nome, especialidade, ativo, pausado, sala_slug').eq('ativo', true).order('nome'),
+    supabase.from('agendamentos').select('medico_id').eq('data_consulta', dataHoje)
+      .in('status', ['aguardando_medico', 'aguardando_paciente', 'em_consulta'])
+      .neq('id', props.agendamento.id),
+  ])
   medicos.value = mData ?? []
+  ocupadoIds.value = new Set((ocupData ?? []).map((a) => a.medico_id))
   medicoSelecionadoId.value = props.agendamento.medico_id
+}
+
+onMounted(carregarMedicos)
+
+function disponivel(m: MedicoOpcao): boolean {
+  return !m.pausado && !ocupadoIds.value.has(m.id)
+}
+
+// Só oferece médicos livres agora — o já vinculado a este agendamento
+// sempre aparece, mesmo ocupado, para não sumir da tela sem explicação.
+const medicosDisponiveis = computed(() =>
+  medicos.value.filter((m) => disponivel(m) || m.id === props.agendamento.medico_id)
+)
+
+// Agrupados por especialidade — cada paciente pode precisar de uma diferente.
+const medicosPorEspecialidade = computed(() => {
+  const grupos: Record<string, MedicoOpcao[]> = {}
+  for (const m of medicosDisponiveis.value) {
+    (grupos[m.especialidade] ??= []).push(m)
+  }
+  return grupos
 })
 
 const medicoSelecionado = computed(() =>
@@ -92,12 +119,17 @@ async function confirmar() {
           v-model="medicoSelecionadoId"
           class="w-full input-base py-2.5 text-sm"
         >
-          <option v-for="m in medicos" :key="m.id" :value="m.id">
-            {{ m.nome }} — {{ m.especialidade }}{{ m.pausado ? ' (pausado)' : '' }}
-          </option>
+          <optgroup v-for="(lista, especialidade) in medicosPorEspecialidade" :key="especialidade" :label="especialidade">
+            <option v-for="m in lista" :key="m.id" :value="m.id">
+              {{ m.nome }}{{ !disponivel(m) ? ' — ocupado agora' : '' }}
+            </option>
+          </optgroup>
         </select>
+        <p v-if="medicosDisponiveis.length === 0" class="mt-1.5 text-xs font-medium" style="color:#dc2626">
+          Nenhum médico disponível no momento — todos estão pausados ou em consulta.
+        </p>
         <p
-          v-if="medicoSelecionadoId !== agendamento.medico_id"
+          v-else-if="medicoSelecionadoId !== agendamento.medico_id"
           class="mt-1.5 text-xs font-medium"
           style="color:#f59e0b"
         >

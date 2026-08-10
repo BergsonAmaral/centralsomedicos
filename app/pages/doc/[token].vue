@@ -3,25 +3,23 @@ definePageMeta({ layout: false })
 
 const route = useRoute()
 const token = route.params.token as string
-const supabase = useSupabaseClient()
 
 const documento = ref<{ pdf_url: string; tipo: string } | null>(null)
 const expirado = ref(false)
 const carregando = ref(true)
 
 onMounted(async () => {
-  const { data } = await supabase
-    .from('documentos')
-    .select('pdf_url, tipo, link_expira_em')
-    .eq('link_acesso', token)
-    .maybeSingle()
-
-  if (!data) {
+  try {
+    const data = await $fetch<{ expirado: boolean; tipo?: string; pdf_url?: string }>('/api/documentos/ver', {
+      query: { token },
+    })
+    if (data.expirado || !data.pdf_url) {
+      expirado.value = true
+    } else {
+      documento.value = { pdf_url: data.pdf_url, tipo: data.tipo ?? '' }
+    }
+  } catch {
     expirado.value = true
-  } else if (data.link_expira_em && new Date(data.link_expira_em) < new Date()) {
-    expirado.value = true
-  } else {
-    documento.value = data
   }
   carregando.value = false
 })

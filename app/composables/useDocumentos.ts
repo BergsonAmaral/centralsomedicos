@@ -181,8 +181,25 @@ export const useDocumentos = () => {
       throw new Error(`Falha no upload do PDF: ${uploadError.message}`)
     }
 
-    const { data: urlData } = supabase.storage.from('documentos').getPublicUrl(path)
-    return urlData?.publicUrl ?? null
+    // O bucket é privado — guardamos o path e resolvemos uma signed URL
+    // sob demanda (ver resolverUrlAssinada), nunca uma URL pública fixa.
+    return path
+  }
+
+  /**
+   * Resolve um path do storage (ou link externo, ex: Memed) numa URL
+   * utilizável. Links externos (http/https) passam direto; paths internos
+   * viram uma signed URL de curta duração — nunca ficam permanentemente
+   * acessíveis.
+   */
+  async function resolverUrlAssinada(pathOuLink: string, expiresInSeg = 600): Promise<string | null> {
+    if (/^https?:\/\//i.test(pathOuLink)) return pathOuLink
+    const { data, error } = await supabase.storage.from('documentos').createSignedUrl(pathOuLink, expiresInSeg)
+    if (error) {
+      console.error('Erro ao gerar signed URL:', error)
+      return null
+    }
+    return data?.signedUrl ?? null
   }
 
   async function salvarDocumento(opts: {
@@ -302,7 +319,9 @@ export const useDocumentos = () => {
 
   /**
    * Gera PDF, faz upload e salva o documento.
-   * Retorna { ok, pdfUrl, doc } para feedback no formulário.
+   * Retorna { ok, pdfUrl, doc } para feedback no formulário — pdfUrl aqui é
+   * o PATH no storage privado, não uma URL utilizável; use
+   * resolverUrlAssinada(pdfUrl) para abrir/exibir o arquivo.
    */
   async function gerarESalvar(opts: {
     tipo: DocumentoTipo
@@ -374,5 +393,5 @@ export const useDocumentos = () => {
     return { ok: true }
   }
 
-  return { gerarEFazerUpload, salvarDocumento, gerarESalvar, salvarDocumentoExterno, formatarCPF, calcularIdade }
+  return { gerarEFazerUpload, salvarDocumento, gerarESalvar, salvarDocumentoExterno, resolverUrlAssinada, formatarCPF, calcularIdade }
 }

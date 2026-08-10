@@ -14,7 +14,7 @@ const props = defineProps<{
   medicoAssinaturaUrl?: string | null
 }>()
 
-const { gerarESalvar, salvarDocumentoExterno } = useDocumentos()
+const { gerarESalvar, salvarDocumentoExterno, resolverUrlAssinada } = useDocumentos()
 
 type TabKey = DocumentoTipo
 const tab = ref<TabKey>('atestado')
@@ -85,9 +85,52 @@ function conteudoAtual(): any {
   }
 }
 
+// Validação por tipo — evita gerar (e enviar ao paciente) um documento
+// clínico com campos essenciais em branco.
+function validar(): string | null {
+  switch (tab.value) {
+    case 'atestado': {
+      const dias = atestado.value.dias
+      if (!dias || dias < 1) return 'Informe a quantidade de dias de afastamento.'
+      return null
+    }
+    case 'pedido_exame': {
+      const algum = pedidoExame.value.exames.some((e) => e.trim())
+      if (!algum) return 'Adicione ao menos um exame.'
+      return null
+    }
+    case 'receita': {
+      const valido = receita.value.medicamentos.some((m) => m.nome.trim() && m.posologia.trim())
+      if (!valido) return 'Informe nome e posologia de ao menos um medicamento.'
+      return null
+    }
+    case 'receita_controlada': {
+      const c = receitaControlada.value
+      if (!c.medicamento.trim() || !c.posologia.trim() || !c.quantidade.trim()) {
+        return 'Preencha medicamento, posologia e quantidade.'
+      }
+      return null
+    }
+    case 'encaminhamento': {
+      if (!encaminhamento.value.especialidade.trim()) return 'Informe a especialidade de destino.'
+      return null
+    }
+    case 'declaracao': {
+      if (!declaracao.value.finalidade.trim()) return 'Informe a finalidade da declaração.'
+      return null
+    }
+  }
+  return null
+}
+
 async function gerar() {
   if (!paciente.value?.id) {
     ultimoErro.value = 'Paciente não identificado'
+    return
+  }
+  const erroValidacao = validar()
+  if (erroValidacao) {
+    ultimoErro.value = erroValidacao
     return
   }
   ultimoErro.value = ''
@@ -113,8 +156,10 @@ async function gerar() {
       },
       agendamentoId: props.agendamento.id,
     })
-    if (result.ok) {
-      ultimoPdfUrl.value = result.pdfUrl
+    if (result.ok && result.pdfUrl) {
+      // pdfUrl retornado é o path no storage privado — resolve uma signed
+      // URL de curta duração só pra confirmar/abrir agora.
+      ultimoPdfUrl.value = await resolverUrlAssinada(result.pdfUrl)
     } else {
       ultimoErro.value = result.error ?? 'Falha ao gerar documento'
     }

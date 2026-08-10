@@ -18,6 +18,9 @@ const dataNascimento = ref('')
 const sexo = ref<'M' | 'F' | 'O' | ''>('')
 const telefone = ref('')
 const email = ref('')
+const unidadeId = ref('')
+
+const unidades = ref<{ id: string; nome: string }[]>([])
 
 // Agendamento opcional
 const criarAgendamento = ref(false)
@@ -34,6 +37,9 @@ onMounted(async () => {
     .eq('ativo', true)
     .order('nome')
   medicos.value = data ?? []
+
+  const { data: uData } = await supabase.from('unidades').select('id, nome').eq('ativo', true).order('nome')
+  unidades.value = uData ?? []
   // hoje (horário local) por padrão
   const d = new Date()
   dataConsulta.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -98,6 +104,7 @@ async function salvar() {
           sexo: sexo.value || null,
           telefone: telefone.value.replace(/\D/g, '') || null,
           email: email.value.trim() || null,
+          unidade_id: unidadeId.value || null,
         })
         .select('id, nome')
         .single()
@@ -201,6 +208,13 @@ async function salvar() {
               <option value="M">Masculino</option>
               <option value="F">Feminino</option>
               <option value="O">Outro</option>
+            </select>
+          </div>
+          <div class="sm:col-span-2">
+            <label class="text-xs font-medium text-[var(--color-text-muted)] block mb-1">Unidade</label>
+            <select v-model="unidadeId" class="input-base">
+              <option value="">—</option>
+              <option v-for="u in unidades" :key="u.id" :value="u.id">{{ u.nome }}</option>
             </select>
           </div>
         </div>

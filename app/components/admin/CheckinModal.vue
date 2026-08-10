@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UserCheck, X, Heart, Thermometer, Activity, Weight, Bluetooth, BluetoothConnected, BluetoothOff, Loader2, Droplets, Scale } from 'lucide-vue-next'
+import { UserCheck, X, Heart, Thermometer, Activity, Weight, Bluetooth, BluetoothConnected, BluetoothOff, Loader2, Droplets, Scale, DoorOpen } from 'lucide-vue-next'
 import type { Agendamento } from '~/types'
 import { useFila } from '~/composables/useFila'
 import { useDispositivosBT, type TipoDispositivo } from '~/composables/useDispositivosBT'
@@ -57,25 +57,45 @@ const triagem = ref({
   imc: null as number | null,
 })
 
-interface MedicoOpcao { id: string; nome: string; especialidade: string; pausado: boolean }
-interface SalaOpcao { id: string; slug: string; nome: string }
+interface MedicoOpcao { id: string; nome: string; especialidade: string; pausado: boolean; sala_slug: string | null }
 
 const medicos = ref<MedicoOpcao[]>([])
-const salas = ref<SalaOpcao[]>([])
+const ocupadoIds = ref<Set<string>>(new Set())
 const medicoSelecionadoId = ref<string | null>(props.agendamento.medico_id ?? null)
-const salaSelecionadaSlug = ref<string | null>(props.agendamento.sala_slug ?? null)
 
 onMounted(async () => {
-  const [{ data: mData }, { data: sData }] = await Promise.all([
-    supabase.from('medicos').select('id, nome, especialidade, pausado').eq('ativo', true).order('nome'),
-    supabase.from('salas').select('id, slug, nome').eq('ativo', true).order('nome'),
+  const hoje = new Date()
+  const dataHoje = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`
+
+  const [{ data: mData }, { data: ocupData }] = await Promise.all([
+    supabase.from('medicos').select('id, nome, especialidade, pausado, sala_slug').eq('ativo', true).order('nome'),
+    supabase.from('agendamentos').select('medico_id').eq('data_consulta', dataHoje)
+      .in('status', ['aguardando_medico', 'aguardando_paciente', 'em_consulta']),
   ])
   medicos.value = mData ?? []
-  salas.value = sData ?? []
-  if (salas.value.length === 1 && !salaSelecionadaSlug.value) {
-    salaSelecionadaSlug.value = salas.value[0].slug
-  }
+  ocupadoIds.value = new Set((ocupData ?? []).map((a) => a.medico_id))
 })
+
+function disponivel(m: MedicoOpcao): boolean {
+  return !m.pausado && !ocupadoIds.value.has(m.id)
+}
+
+// Só oferece médicos livres agora, agrupados por especialidade — cada
+// paciente pode precisar de uma diferente.
+const medicosPorEspecialidade = computed(() => {
+  const grupos: Record<string, MedicoOpcao[]> = {}
+  for (const m of medicos.value.filter(disponivel)) {
+    (grupos[m.especialidade] ??= []).push(m)
+  }
+  return grupos
+})
+
+const medicoSelecionado = computed(() =>
+  medicos.value.find((m) => m.id === medicoSelecionadoId.value) ?? null
+)
+
+// Sala é sempre a sala do médico selecionado — cada médico tem a sua própria
+const salaSelecionadaSlug = computed(() => medicoSelecionado.value?.sala_slug ?? null)
 
 const paciente = computed(() => props.agendamento.pacientes)
 const cpfFormatado = computed(() => {
@@ -126,26 +146,34 @@ async function confirmar() {
       </div>
 
       <!-- Médico e Sala -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label class="text-xs font-semibold text-[var(--color-text-muted)] block mb-1">Médico</label>
-          <select v-model="medicoSelecionadoId" class="input-base py-2.5 text-sm">
-            <option :value="null">Selecione…</option>
-            <option v-for="m in medicos" :key="m.id" :value="m.id">
-              {{ m.nome }} — {{ m.especialidade }}{{ m.pausado ? ' (pausado)' : '' }}
-            </option>
-          </select>
+      <div>
+        <label class="text-xs font-semibold text-[var(--color-text-muted)] block mb-1">Médico</label>
+        <select v-model="medicoSelecionadoId" class="input-base py-2.5 text-sm">
+          <option :value="null">Selecione…</option>
+          <optgroup v-for="(lista, especialidade) in medicosPorEspecialidade" :key="especialidade" :label="especialidade">
+            <option v-for="m in lista" :key="m.id" :value="m.id">{{ m.nome }}</option>
+          </optgroup>
+        </select>
+        <p v-if="Object.keys(medicosPorEspecialidade).length === 0" class="mt-1.5 text-xs font-medium" style="color:#dc2626">
+          Nenhum médico disponível no momento.
+        </p>
+      </div>
+      <div v-if="medicoSelecionadoId">
+        <label class="text-xs font-semibold text-[var(--color-text-muted)] block mb-1">Sala</label>
+        <div v-if="salaSelecionadaSlug"
+          class="flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm"
+          style="background:#f5f3ff;border-color:#ddd6fe;color:#5b21b6"
+        >
+          <DoorOpen :size="15" style="color:#7c3aed;flex-shrink:0" />
+          <span class="font-semibold">/sala/{{ salaSelecionadaSlug }}</span>
+          <span class="ml-auto text-xs px-2 py-0.5 rounded-full font-medium" style="background:#ede9fe;color:#7c3aed">automático</span>
         </div>
-        <div>
-          <label class="text-xs font-semibold text-[var(--color-text-muted)] block mb-1">Sala</label>
-          <select v-model="salaSelecionadaSlug" class="input-base py-2.5 text-sm">
-            <option :value="null">Selecione…</option>
-            <option v-for="s in salas" :key="s.id" :value="s.slug">{{ s.nome }}</option>
-          </select>
+        <div v-else class="text-xs p-3 rounded-lg" style="background:#fef9c3;color:#854d0e">
+          ⚠️ Este médico não tem sala configurada. Edite o cadastro dele em <strong>Admin → Médicos</strong>.
         </div>
       </div>
-      <p v-if="!medicoSelecionadoId || !salaSelecionadaSlug" class="text-xs text-[var(--color-text-muted)] -mt-1">
-        Se não selecionar médico e sala, o paciente ficará em check-in aguardando ser chamado manualmente.
+      <p v-if="!medicoSelecionadoId" class="text-xs text-[var(--color-text-muted)] -mt-1">
+        Se não selecionar médico, o paciente ficará em check-in aguardando ser chamado manualmente.
       </p>
 
       <!-- Triagem -->

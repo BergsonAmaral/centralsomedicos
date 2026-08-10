@@ -5,11 +5,21 @@ import type { Documento } from '~/types'
 definePageMeta({ layout: 'admin', middleware: ['auth', 'role'] })
 
 const supabase = useSupabaseClient()
+const { resolverUrlAssinada } = useDocumentos()
 const documentos = ref<Documento[]>([])
 const carregando = ref(true)
 const verModal = ref<Documento | null>(null)
+const verModalUrl = ref<string | null>(null)
 const enviarModal = ref<Documento | null>(null)
+const enviarModalUrl = ref<string | null>(null)
 const total = ref(0)
+
+// pdf_url guarda um path do storage privado (ou um link externo, ex:
+// Memed) — nunca uma URL pronta pra usar. Resolve sempre sob demanda.
+async function abrirVer(doc: Documento) {
+  verModal.value = doc
+  verModalUrl.value = doc.pdf_url ? await resolverUrlAssinada(doc.pdf_url) : null
+}
 
 const TIPOS_LABELS: Record<string, string> = {
   atestado: 'Atestado',
@@ -162,11 +172,12 @@ const enviandoEmail = ref('')
 const enviandoCanal = ref<'whatsapp' | 'email' | 'ambos'>('email')
 const enviandoLoading = ref(false)
 
-function abrirEnviar(doc: Documento) {
+async function abrirEnviar(doc: Documento) {
   enviarModal.value = doc
   enviandoTelefone.value = doc.pacientes?.telefone ?? ''
   enviandoEmail.value = doc.pacientes?.email ?? ''
   enviandoCanal.value = 'email'
+  enviarModalUrl.value = doc.pdf_url ? await resolverUrlAssinada(doc.pdf_url) : null
 }
 
 async function confirmarEnvio() {
@@ -197,6 +208,7 @@ async function confirmarEnvio() {
 
     await carregar()
     enviarModal.value = null
+    enviarModalUrl.value = null
   } finally {
     enviandoLoading.value = false
   }
@@ -413,7 +425,7 @@ const paginasVisiveis = computed(() => {
               :key="doc.id"
               class="border-b transition-colors hover:bg-blue-50 cursor-pointer"
               style="border-color:var(--color-border-light)"
-              @click="verModal = doc"
+              @click="abrirVer(doc)"
             >
               <td class="px-4 py-3">
                 <span
@@ -459,7 +471,7 @@ const paginasVisiveis = computed(() => {
                     class="p-1.5 rounded-lg transition-colors"
                     style="background:#eff6ff;color:#2563eb"
                     title="Visualizar PDF"
-                    @click="verModal = doc"
+                    @click="abrirVer(doc)"
                   >
                     <Eye :size="14" />
                   </button>
@@ -533,27 +545,29 @@ const paginasVisiveis = computed(() => {
     </div>
 
   <!-- Modal Visualizar PDF -->
-  <UiModal v-if="verModal" :model-value="true" title="Visualizar Documento" size="xl" @update:model-value="verModal = null">
+  <UiModal v-if="verModal" :model-value="true" title="Visualizar Documento" size="xl" @update:model-value="verModal = null; verModalUrl = null">
+    <div v-if="!verModalUrl" class="py-16 text-center text-sm text-[var(--color-text-muted)]">Carregando documento…</div>
     <iframe
-      :src="verModal.pdf_url ?? ''"
+      v-else
+      :src="verModalUrl"
       class="w-full h-[70vh] rounded-lg border border-[var(--color-border)]"
     />
     <template #footer>
-      <a :href="verModal.pdf_url ?? '#'" target="_blank" class="inline-flex">
+      <a v-if="verModalUrl" :href="verModalUrl" target="_blank" class="inline-flex">
         <UiButton variant="secondary" size="sm">
           <FileDown :size="15" /> Baixar PDF
         </UiButton>
       </a>
-      <UiButton variant="ghost" @click="verModal = null">Fechar</UiButton>
+      <UiButton variant="ghost" @click="verModal = null; verModalUrl = null">Fechar</UiButton>
     </template>
   </UiModal>
 
   <!-- Modal Enviar -->
-  <UiModal v-if="enviarModal" :model-value="true" title="Enviar ao Paciente" size="lg" @update:model-value="enviarModal = null">
+  <UiModal v-if="enviarModal" :model-value="true" title="Enviar ao Paciente" size="lg" @update:model-value="enviarModal = null; enviarModalUrl = null">
     <div class="space-y-4">
-      <div v-if="enviarModal.pdf_url">
+      <div v-if="enviarModalUrl">
         <p class="text-sm font-semibold text-[var(--color-text-muted)] mb-2">Preview do documento</p>
-        <iframe :src="enviarModal.pdf_url" class="w-full h-64 rounded border border-[var(--color-border)]" />
+        <iframe :src="enviarModalUrl" class="w-full h-64 rounded border border-[var(--color-border)]" />
       </div>
       <div class="grid grid-cols-2 gap-3">
         <UiInput v-model="enviandoTelefone" label="Telefone / WhatsApp" placeholder="(XX) XXXXX-XXXX" mask="telefone" />
@@ -570,7 +584,7 @@ const paginasVisiveis = computed(() => {
       </div>
     </div>
     <template #footer>
-      <UiButton variant="ghost" @click="enviarModal = null">Cancelar</UiButton>
+      <UiButton variant="ghost" @click="enviarModal = null; enviarModalUrl = null">Cancelar</UiButton>
       <UiButton variant="success" :loading="enviandoLoading" @click="confirmarEnvio">
         <Send :size="15" /> Confirmar Envio
       </UiButton>
