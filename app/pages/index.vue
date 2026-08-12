@@ -209,7 +209,9 @@ onMounted(async () => {
   )
   document.querySelectorAll('.reveal, .reveal-l, .reveal-r').forEach(el => io.observe(el))
 
-  /* Counters fire once when the stats strip becomes visible */
+  /* Counters fire once when the stats strip becomes visible.
+     Belt-and-suspenders: some browsers/automation contexts don't fire
+     IntersectionObserver reliably, so also poll on scroll as a fallback. */
   const statsSection = document.querySelector('.s-stats')
   if (statsSection) {
     const statsIo = new IntersectionObserver(
@@ -217,6 +219,18 @@ onMounted(async () => {
       { threshold: 0.3 }
     )
     statsIo.observe(statsSection)
+
+    const checkStatsVisible = () => {
+      if (counted) { window.removeEventListener('scroll', checkStatsVisible); return }
+      const r = statsSection.getBoundingClientRect()
+      if (r.top < window.innerHeight * 0.85 && r.bottom > 0) {
+        runCounters()
+        statsIo.disconnect()
+        window.removeEventListener('scroll', checkStatsVisible)
+      }
+    }
+    window.addEventListener('scroll', checkStatsVisible, { passive: true })
+    checkStatsVisible()
   }
 
   /* Cursor */
