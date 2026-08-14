@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Agendamento, Medico } from '~/types'
+import type { Agendamento, Sala } from '~/types'
 
 definePageMeta({ layout: 'sala' })
 
@@ -7,10 +7,12 @@ const route = useRoute()
 const slug = route.params.slug as string
 const supabase = useSupabaseClient()
 
-const medico = ref<Medico | null>(null)
+const sala = ref<Sala | null>(null)
 const pacienteAtual = ref<Agendamento | null>(null)
 const horaAtual = ref('')
 const erro = ref('')
+
+const unidadeNome = computed(() => sala.value?.unidades?.nome ?? '')
 
 let clockInterval: ReturnType<typeof setInterval>
 let pollingInterval: ReturnType<typeof setInterval>
@@ -30,11 +32,10 @@ function getHoje() {
 }
 
 async function buscarPacienteAtivo() {
-  if (!medico.value) return
   const { data } = await supabase
     .from('agendamentos')
     .select('*, pacientes(nome), medicos(id, nome, especialidade)')
-    .eq('medico_id', medico.value.id)
+    .eq('sala_slug', slug)
     .in('status', ['aguardando_medico', 'aguardando_paciente', 'em_consulta', 'aguardando_avaliacao'])
     .eq('data_consulta', getHoje())
     .maybeSingle()
@@ -42,29 +43,29 @@ async function buscarPacienteAtivo() {
   pacienteAtual.value = data ?? null
 }
 
-// Buscar médico pelo sala_slug
-const { data: medicoData } = await useAsyncData(
-  `medico-sala-${slug}`,
+// Buscar a sala (e a unidade dona dela) pelo slug
+const { data: salaData } = await useAsyncData(
+  `sala-${slug}`,
   async () => {
     const { data } = await supabase
-      .from('medicos')
-      .select('*')
-      .eq('sala_slug', slug)
+      .from('salas')
+      .select('*, unidades(id, nome, tipo)')
+      .eq('slug', slug)
       .eq('ativo', true)
       .single()
     return data ?? null
   }
 )
 
-if (!medicoData.value) {
-  erro.value = 'Sala não encontrada ou médico inativo.'
+if (!salaData.value) {
+  erro.value = 'Sala não encontrada ou inativa.'
 } else {
-  medico.value = medicoData.value as Medico
+  sala.value = salaData.value as Sala
 
   const { data: ativo } = await supabase
     .from('agendamentos')
     .select('*, pacientes(nome), medicos(id, nome, especialidade)')
-    .eq('medico_id', medico.value.id)
+    .eq('sala_slug', slug)
     .in('status', ['aguardando_medico', 'aguardando_paciente', 'em_consulta', 'aguardando_avaliacao'])
     .eq('data_consulta', getHoje())
     .maybeSingle()
@@ -89,17 +90,17 @@ onMounted(() => {
 
   window.addEventListener('pagehide', avisarSaidaSeEmConsulta)
 
-  if (!medico.value) return
+  if (!sala.value) return
 
   supabase
-    .channel(`sala-medico-${medico.value.id}`)
+    .channel(`sala-${slug}`)
     .on(
       'postgres_changes',
       {
         event: 'UPDATE',
         schema: 'public',
         table: 'agendamentos',
-        filter: `medico_id=eq.${medico.value.id}`,
+        filter: `sala_slug=eq.${slug}`,
       },
       async (payload) => {
         if (['aguardando_medico', 'aguardando_paciente', 'em_consulta', 'aguardando_avaliacao'].includes(payload.new.status)) {
@@ -152,8 +153,9 @@ async function entrarConsulta() {
     </div>
 
     <SalaTelaEspera
-      v-else-if="medico"
-      :medico="medico"
+      v-else-if="sala"
+      :unidade-nome="unidadeNome"
+      :sala-slug="slug"
       :paciente-atual="pacienteAtual"
       :hora-atual="horaAtual"
       @entrar="entrarConsulta"

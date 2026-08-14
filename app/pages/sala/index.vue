@@ -1,16 +1,11 @@
 <script setup lang="ts">
-import type { Agendamento, Medico } from '~/types'
-
+// Não existe mais "sala genérica" — cada sala pertence a uma unidade
+// específica, acessada sempre por /sala/[slug]. Esta página só orienta
+// quem cair aqui sem slug (link antigo, favorito desatualizado, etc).
 definePageMeta({ layout: 'sala' })
 
-const supabase = useSupabaseClient()
-
-const pacienteAtual = ref<Agendamento | null>(null)
 const horaAtual = ref('')
-
 let clockInterval: ReturnType<typeof setInterval>
-let pollingInterval: ReturnType<typeof setInterval>
-let realtimeChannel: ReturnType<typeof supabase.channel> | null = null
 
 function atualizarHora() {
   const now = new Date()
@@ -21,106 +16,17 @@ function atualizarHora() {
   })
 }
 
-function getHoje() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-async function buscarPacienteAtivo() {
-  const { data } = await supabase
-    .from('agendamentos')
-    .select('*, pacientes(nome), medicos(id, nome, especialidade, sala_slug, crm, foto_url, ativo, pausado, user_id, valor_consulta, assinatura_url, created_at)')
-    .in('status', ['aguardando_medico', 'aguardando_paciente', 'em_consulta', 'aguardando_avaliacao'])
-    .eq('data_consulta', getHoje())
-    .order('chamado_em', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  if (data) {
-    pacienteAtual.value = data
-  } else if (!pacienteAtual.value || !['aguardando_medico', 'aguardando_paciente', 'em_consulta', 'aguardando_avaliacao'].includes(pacienteAtual.value.status)) {
-    pacienteAtual.value = null
-  }
-}
-
-const medicoAtual = computed<Medico | null>(() => {
-  if (!pacienteAtual.value?.medicos) return null
-  return pacienteAtual.value.medicos as unknown as Medico
-})
-
-function avisarSaidaSeEmConsulta() {
-  if (pacienteAtual.value?.status === 'em_consulta') {
-    const payload = JSON.stringify({ agendamentoId: pacienteAtual.value.id, quem: 'paciente' })
-    navigator.sendBeacon('/api/agendamentos/desconectar', new Blob([payload], { type: 'application/json' }))
-  }
-}
-
-onMounted(async () => {
+onMounted(() => {
   atualizarHora()
   clockInterval = setInterval(atualizarHora, 1000)
-  await buscarPacienteAtivo()
-  pollingInterval = setInterval(buscarPacienteAtivo, 3000)
-
-  window.addEventListener('pagehide', avisarSaidaSeEmConsulta)
-
-  realtimeChannel = supabase
-    .channel('sala-generica-realtime')
-    .on(
-      'postgres_changes',
-      { event: 'UPDATE', schema: 'public', table: 'agendamentos' },
-      async (payload) => {
-        if (['aguardando_medico', 'aguardando_paciente', 'em_consulta', 'aguardando_avaliacao'].includes(payload.new.status)) {
-          await buscarPacienteAtivo()
-        }
-        if (['concluido', 'cancelado', 'faltou', 'checkin', 'agendado'].includes(payload.new.status)) {
-          if (pacienteAtual.value?.id === payload.new.id) {
-            pacienteAtual.value = null
-          }
-        }
-      }
-    )
-    .subscribe()
 })
 
-onUnmounted(() => {
-  clearInterval(clockInterval)
-  clearInterval(pollingInterval)
-  window.removeEventListener('pagehide', avisarSaidaSeEmConsulta)
-  if (realtimeChannel) supabase.removeChannel(realtimeChannel)
-})
-
-async function entrarConsulta() {
-  if (!pacienteAtual.value) return
-  const { data, error } = await supabase
-    .from('agendamentos')
-    .update({ status: 'em_consulta' })
-    .eq('id', pacienteAtual.value.id)
-    .eq('status', 'aguardando_paciente')
-    .select()
-    .maybeSingle()
-
-  if (error || !data) {
-    alert('Não foi possível entrar na consulta agora. Atualize a página e tente novamente.')
-    return
-  }
-  pacienteAtual.value = data
-}
+onUnmounted(() => clearInterval(clockInterval))
 </script>
 
 <template>
   <div class="w-screen h-screen overflow-hidden select-none">
-    <!-- Há consulta ativa: passa o médico do agendamento -->
-    <SalaTelaEspera
-      v-if="medicoAtual"
-      :medico="medicoAtual"
-      :paciente-atual="pacienteAtual"
-      :hora-atual="horaAtual"
-      @entrar="entrarConsulta"
-    />
-
-    <!-- Sem consulta ativa: tela de espera genérica -->
     <div
-      v-else
       class="h-screen w-full flex flex-col overflow-hidden"
       style="background:linear-gradient(135deg,#0c2340 0%,#1a4a7a 100%)"
     >
@@ -140,8 +46,8 @@ async function entrarConsulta() {
           <div class="absolute rounded-full animate-ping" style="inset:-12px;border:1px solid rgba(255,255,255,0.1);animation-delay:0.3s" />
         </div>
         <div>
-          <h1 class="text-5xl font-bold mb-4" style="color:#ffffff">Aguardando chamada...</h1>
-          <p class="text-xl" style="color:rgba(255,255,255,0.6)">Fique à vontade. Você será chamado em breve.</p>
+          <h1 class="text-5xl font-bold mb-4" style="color:#ffffff">Link de sala inválido</h1>
+          <p class="text-xl" style="color:rgba(255,255,255,0.6)">Peça à recepção o link correto da sua sala de atendimento.</p>
         </div>
       </div>
     </div>

@@ -24,8 +24,8 @@ export const useFila = () => {
     'id', 'status', 'data_consulta', 'motivo', 'observacoes', 'origem',
     'checkin_em', 'chamado_em', 'encerrado_em', 'triagem', 'sala_slug',
     'paciente_id', 'medico_id', 'created_at',
-    'pacientes(id,nome,cpf,data_nascimento,sexo,telefone,email,sus_cartao)',
-    'medicos(id,nome,especialidade,sala_slug,crm,pausado)',
+    'pacientes(id,nome,cpf,data_nascimento,sexo,telefone,email,sus_cartao,unidade_id)',
+    'medicos(id,nome,especialidade,crm,pausado)',
   ].join(',')
 
   async function carregar(medicoId?: string | null) {
@@ -77,15 +77,14 @@ export const useFila = () => {
     _distribuirNaStore([...semEste, ag])
   }
 
-  async function fazerCheckin(id: string, triagem: Triagem) {
-    return supabase
-      .from('agendamentos')
-      .update({
-        status: 'checkin',
-        checkin_em: new Date().toISOString(),
-        triagem,
-      })
-      .eq('id', id)
+  async function fazerCheckin(id: string, triagem: Triagem, salaSlug?: string | null) {
+    const updates: Record<string, any> = {
+      status: 'checkin',
+      checkin_em: new Date().toISOString(),
+      triagem,
+    }
+    if (salaSlug !== undefined) updates.sala_slug = salaSlug
+    return supabase.from('agendamentos').update(updates).eq('id', id)
   }
 
   // ADMIN chama → médico recebe modal de aceite (medicoId e salaSlug opcionais)

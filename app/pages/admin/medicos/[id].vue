@@ -35,33 +35,12 @@ const [senha, senhaAttrs] = defineField('senha')
 const [telefone, telefoneAttrs] = defineField('telefone')
 const [valorConsulta, valorConsultaAttrs] = defineField('valor_consulta')
 
-// Sala do médico
-const salaSlug = ref('')
-const salaSlugManual = ref(false)
-
-watch(nome, (val) => {
-  if (!salaSlugManual.value) {
-    salaSlug.value = slugify(val)
-  }
-})
-
 const senhaVisivel = ref(false)
 
 const salvando = ref(false)
 const fotoFile = ref<File | null>(null)
 const fotoPreview = ref<string | null>(null)
 const erro = ref('')
-
-// Gera slug a partir do nome
-function slugify(str: string): string {
-  return str
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9\s-]/g, '')
-    .trim()
-    .replace(/\s+/g, '-')
-}
 
 // Carregar dados se edição
 const emailOriginal = ref<string>('')
@@ -80,8 +59,6 @@ onMounted(async () => {
         })
         emailOriginal.value = data.email ?? ''
         fotoPreview.value = data.foto_url
-        salaSlug.value = data.sala_slug ?? ''
-        if (data.sala_slug) salaSlugManual.value = true
       }
     } catch (e: any) {
       erro.value = e?.data?.message ?? 'Erro ao carregar médico'
@@ -123,7 +100,6 @@ const onSubmit = handleSubmit(async (values) => {
           senha: values.senha,
           foto_url: fotoUrl,
           valor_consulta: values.valor_consulta ?? 0,
-          sala_slug: salaSlug.value || null,
         },
       }).catch((e) => {
         throw new Error(e?.data?.message ?? 'Erro ao criar médico')
@@ -141,7 +117,6 @@ const onSubmit = handleSubmit(async (values) => {
         especialidade: values.especialidade,
         foto_url: fotoUrl,
         valor_consulta: values.valor_consulta ?? null,
-        sala_slug: salaSlug.value || null,
       }).eq('id', id)
 
       // Atualiza credenciais (email/senha) se mudaram
@@ -248,39 +223,6 @@ async function excluirMedico() {
             >
               <component :is="senhaVisivel ? EyeOff : Eye" :size="16" />
             </button>
-          </div>
-        </div>
-      </UiCard>
-
-      <!-- Sala de teleconsulta -->
-      <UiCard>
-        <template #header>
-          <h3 class="font-semibold">Sala de Teleconsulta</h3>
-        </template>
-        <div class="space-y-3">
-          <p class="text-sm text-[var(--color-text-muted)]">
-            Cada médico tem sua própria sala virtual. Os pacientes aguardam nessa URL antes da consulta.
-          </p>
-          <div>
-            <label class="block text-sm font-semibold text-[var(--color-text)] mb-1.5">
-              Link da sala
-            </label>
-            <div class="flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm" style="border-color:var(--color-border);background:var(--color-surface-2)">
-              <span class="shrink-0" style="color:var(--color-text-dim)">/sala/</span>
-              <input
-                v-model="salaSlug"
-                class="flex-1 bg-transparent outline-none text-[var(--color-text)]"
-                placeholder="dr-nome-sobrenome"
-                @input="salaSlugManual = true"
-              />
-            </div>
-            <p class="mt-1.5 text-xs" style="color:var(--color-text-muted)">
-              URL completa:
-              <strong>{{ typeof window !== 'undefined' ? window.location.origin : '' }}/sala/{{ salaSlug || '...' }}</strong>
-            </p>
-            <p v-if="!salaSlug" class="mt-1 text-xs text-amber-600">
-              ⚠️ Preencha o nome do médico para gerar o slug automaticamente.
-            </p>
           </div>
         </div>
       </UiCard>

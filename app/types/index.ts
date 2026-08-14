@@ -18,12 +18,34 @@ export interface Medico {
   crm: string
   especialidade: string
   foto_url: string | null
-  sala_slug: string
   ativo: boolean
   pausado: boolean
   valor_consulta: number | null
   assinatura_url: string | null
   created_at: string
+}
+
+export type UnidadeTipo = 'hospital' | 'ubs' | 'itinerante' | 'rural'
+
+export interface Unidade {
+  id: string
+  nome: string
+  tipo: UnidadeTipo
+  cidade: string | null
+  ativo: boolean
+  created_at: string
+}
+
+// A sala pertence à unidade (local físico onde o paciente está), não ao
+// médico — o admin roteia o paciente daquela sala para quem estiver livre.
+export interface Sala {
+  id: string
+  slug: string
+  nome: string
+  unidade_id: string
+  ativo: boolean
+  created_at: string
+  unidades?: Pick<Unidade, 'id' | 'nome' | 'tipo'>
 }
 
 export interface Paciente {
@@ -35,6 +57,7 @@ export interface Paciente {
   telefone: string | null
   email: string | null
   sus_cartao: string | null
+  unidade_id: string | null
   created_at: string
 }
 
@@ -86,7 +109,7 @@ export interface Agendamento {
   created_at: string
   // Relações
   pacientes?: Paciente
-  medicos?: Pick<Medico, 'id' | 'nome' | 'especialidade' | 'sala_slug' | 'crm' | 'pausado'>
+  medicos?: Pick<Medico, 'id' | 'nome' | 'especialidade' | 'crm' | 'pausado'>
 }
 
 export interface Consulta {

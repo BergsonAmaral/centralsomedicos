@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { Star } from 'lucide-vue-next'
-import type { Agendamento, Medico } from '~/types'
+import type { Agendamento } from '~/types'
 
 const props = defineProps<{
-  medico: Medico
+  unidadeNome: string
+  salaSlug: string
   pacienteAtual: Agendamento | null
   horaAtual: string
 }>()
@@ -11,6 +12,10 @@ const props = defineProps<{
 const emit = defineEmits<{ entrar: [] }>()
 
 const nomePaciente = computed(() => (props.pacienteAtual?.pacientes as any)?.nome ?? '')
+
+// O médico não pertence à sala — é atribuído dinamicamente por paciente,
+// então só existe um "médico atual" quando há alguém sendo atendido.
+const nomeMedicoAtual = computed(() => (props.pacienteAtual?.medicos as any)?.nome ?? '')
 const aguardandoMedico = computed(() => props.pacienteAtual?.status === 'aguardando_medico')
 const aguardandoEntrar = computed(() => props.pacienteAtual?.status === 'aguardando_paciente')
 const emConsulta      = computed(() => props.pacienteAtual?.status === 'em_consulta')
@@ -74,9 +79,9 @@ onUnmounted(() => { if (obrigadoTimer) clearTimeout(obrigadoTimer) })
 
 function handleEntrar() { jitsiAtivo.value = true; emit('entrar') }
 
-// Iniciais do médico para avatar
+// Iniciais da unidade para avatar (a sala é da unidade, não do médico)
 const iniciais = computed(() =>
-  props.medico.nome.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase()
+  props.unidadeNome.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase()
 )
 </script>
 
@@ -90,7 +95,7 @@ const iniciais = computed(() =>
         <span class="w-3 h-3 rounded-full shrink-0"
           style="background:#4ade80;box-shadow:0 0 10px #4ade80;animation:blink 1.4s ease-in-out infinite" />
         <p style="color:#ffffff;font-size:1.1rem;font-weight:600;flex:1">
-          Consulta com <strong>Dr(a). {{ medico.nome }}</strong>
+          Consulta com <strong>Dr(a). {{ nomeMedicoAtual }}</strong>
         </p>
         <span style="background:#14532d;color:#86efac;font-size:0.8rem;font-weight:700;padding:4px 12px;border-radius:999px">
           AO VIVO
@@ -122,7 +127,7 @@ const iniciais = computed(() =>
           <div>
             <h1 style="color:#ffffff;font-size:3.5rem;font-weight:900;margin-bottom:0.75rem">Consulta encerrada</h1>
             <p style="color:#e2e8f0;font-size:1.5rem">
-              Como foi o atendimento com <strong style="color:#ffffff">Dr(a). {{ medico.nome }}</strong>?
+              Como foi o atendimento com <strong style="color:#ffffff">Dr(a). {{ nomeMedicoAtual }}</strong>?
             </p>
           </div>
           <div style="display:flex;gap:1.25rem">
@@ -185,8 +190,8 @@ const iniciais = computed(() =>
             {{ iniciais }}
           </div>
           <div>
-            <p style="color:#ffffff;font-weight:700;font-size:1.3rem;line-height:1.2">Dr(a). {{ medico.nome }}</p>
-            <p style="color:#93c5fd;font-size:1rem;font-weight:500">{{ medico.especialidade }}</p>
+            <p style="color:#ffffff;font-weight:700;font-size:1.3rem;line-height:1.2">{{ unidadeNome }}</p>
+            <p style="color:#93c5fd;font-size:1rem;font-weight:500">Sala de Teleconsulta</p>
           </div>
         </div>
         <!-- Relógio -->
@@ -206,7 +211,7 @@ const iniciais = computed(() =>
 
           <div style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem 1.5rem;border-radius:1rem;background:rgba(74,222,128,0.15);border:2px solid rgba(74,222,128,0.4)">
             <span style="width:12px;height:12px;border-radius:50%;background:#4ade80;animation:blink 1.4s ease-in-out infinite;display:inline-block;flex-shrink:0" />
-            <span style="color:#86efac;font-weight:700;font-size:1.3rem">Dr(a). {{ medico.nome }} está pronto(a)!</span>
+            <span style="color:#86efac;font-weight:700;font-size:1.3rem">Dr(a). {{ nomeMedicoAtual }} está pronto(a)!</span>
           </div>
 
           <div>
@@ -249,7 +254,7 @@ const iniciais = computed(() =>
               {{ nomePaciente }}
             </h1>
             <p style="color:#e2e8f0;font-size:1.5rem">
-              Aguardando <strong style="color:#fde68a">Dr(a). {{ medico.nome }}</strong> confirmar
+              Aguardando <strong style="color:#fde68a">Dr(a). {{ nomeMedicoAtual }}</strong> confirmar
             </p>
           </div>
 
@@ -290,7 +295,7 @@ const iniciais = computed(() =>
           <div style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem 1.5rem;border-radius:1rem;background:rgba(255,255,255,0.1);border:2px solid rgba(255,255,255,0.2)">
             <span style="width:12px;height:12px;border-radius:50%;background:#7dd3fc;animation:blink 2.5s ease-in-out infinite;display:inline-block;flex-shrink:0" />
             <span style="color:#ffffff;font-weight:600;font-size:1.2rem">
-              Sala disponível · Dr(a). {{ medico.nome }}
+              Sala disponível
             </span>
           </div>
         </div>
@@ -301,7 +306,7 @@ const iniciais = computed(() =>
       <footer class="shrink-0 py-3 text-center"
         style="border-top:1px solid rgba(255,255,255,0.07)">
         <p style="color:rgba(255,255,255,0.3);font-size:0.8rem">
-          SóMedicos · Teleconsulta · /sala/{{ medico.sala_slug }}
+          SóMedicos · Teleconsulta · /sala/{{ salaSlug }}
         </p>
       </footer>
     </template>

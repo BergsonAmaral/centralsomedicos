@@ -17,7 +17,7 @@ const carregando = ref(false)
 const paciente = computed(() => props.agendamento.pacientes)
 
 // Lista de médicos disponíveis
-interface MedicoOpcao { id: string; nome: string; especialidade: string; ativo: boolean; pausado: boolean; sala_slug: string | null }
+interface MedicoOpcao { id: string; nome: string; especialidade: string; ativo: boolean; pausado: boolean }
 const medicos = ref<MedicoOpcao[]>([])
 const ocupadoIds = ref<Set<string>>(new Set())
 const medicoSelecionadoId = ref(props.agendamento.medico_id)
@@ -27,7 +27,7 @@ async function carregarMedicos() {
   const dataHoje = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`
 
   const [{ data: mData }, { data: ocupData }] = await Promise.all([
-    supabase.from('medicos').select('id, nome, especialidade, ativo, pausado, sala_slug').eq('ativo', true).order('nome'),
+    supabase.from('medicos').select('id, nome, especialidade, ativo, pausado').eq('ativo', true).order('nome'),
     supabase.from('agendamentos').select('medico_id').eq('data_consulta', dataHoje)
       .in('status', ['aguardando_medico', 'aguardando_paciente', 'em_consulta'])
       .neq('id', props.agendamento.id),
@@ -62,8 +62,9 @@ const medicoSelecionado = computed(() =>
   medicos.value.find(m => m.id === medicoSelecionadoId.value) ?? null
 )
 
-// Sala é sempre a sala do médico selecionado
-const salaSelecionadaSlug = computed(() => medicoSelecionado.value?.sala_slug ?? null)
+// A sala já foi definida no check-in (é a sala física da unidade onde o
+// paciente está) — aqui só se escolhe quem vai atender, não se muda a sala.
+const salaAtualSlug = computed(() => props.agendamento.sala_slug ?? null)
 
 async function confirmar() {
   carregando.value = true
@@ -72,11 +73,7 @@ async function confirmar() {
       ? medicoSelecionadoId.value ?? undefined
       : undefined
 
-    const { error } = await fila.chamar(
-      props.agendamento.id,
-      novoMedicoId,
-      salaSelecionadaSlug.value ?? undefined,
-    )
+    const { error } = await fila.chamar(props.agendamento.id, novoMedicoId)
     if (error) throw new Error(error.message)
     await fila.carregar()
     try {
@@ -86,7 +83,7 @@ async function confirmar() {
         detalhes: {
           paciente: paciente.value?.nome,
           medico: medicoSelecionado.value?.nome,
-          sala: salaSelecionadaSlug.value,
+          sala: salaAtualSlug.value,
         },
       })
     } catch {}
@@ -137,28 +134,27 @@ async function confirmar() {
         </p>
       </div>
 
-      <!-- Sala automática do médico -->
+      <!-- Sala: já definida no check-in, na unidade do paciente -->
       <div>
         <label class="block text-sm font-semibold text-[var(--color-text)] mb-2 flex items-center gap-1.5">
           <DoorOpen :size="16" style="color:#7c3aed" />
-          Sala de atendimento
+          Sala do paciente
         </label>
-        <div v-if="salaSelecionadaSlug"
+        <div v-if="salaAtualSlug"
           class="flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm"
           style="background:#f5f3ff;border-color:#ddd6fe;color:#5b21b6"
         >
           <DoorOpen :size="15" style="color:#7c3aed;flex-shrink:0" />
-          <span class="font-semibold">/sala/{{ salaSelecionadaSlug }}</span>
-          <span class="ml-auto text-xs px-2 py-0.5 rounded-full font-medium" style="background:#ede9fe;color:#7c3aed">automático</span>
+          <span class="font-semibold">/sala/{{ salaAtualSlug }}</span>
         </div>
         <div v-else class="text-xs p-3 rounded-lg" style="background:#fef9c3;color:#854d0e">
-          ⚠️ Este médico não tem sala configurada. Edite o cadastro dele em <strong>Admin → Médicos</strong> e defina o slug da sala.
+          ⚠️ Este paciente não tem sala definida. Volte ao check-in e selecione a sala da unidade.
         </div>
       </div>
 
       <!-- Aviso -->
       <p class="text-xs text-[var(--color-text-muted)] bg-[var(--color-surface-2)] p-3 rounded-lg border border-[var(--color-border-light)]">
-        ℹ️ O médico receberá um aviso para aceitar. A tela da sala dele exibirá o nome do paciente chamado.
+        ℹ️ O médico receberá um aviso para aceitar. A tela da sala do paciente exibirá o nome dele quando confirmado.
       </p>
     </div>
 
