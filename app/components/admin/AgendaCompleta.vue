@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { Search, Filter, Eye, Calendar, Plus } from 'lucide-vue-next'
+import { Search, Filter, Eye, Calendar, Plus, Building2 } from 'lucide-vue-next'
 import type { Agendamento, AgendamentoStatus } from '~/types'
 
 interface Props {
   medicoFiltro?: string | null
+  unidadeFiltro?: string | null
 }
-const props = withDefaults(defineProps<Props>(), { medicoFiltro: null })
+const props = withDefaults(defineProps<Props>(), { medicoFiltro: null, unidadeFiltro: null })
 
 const supabase = useSupabaseClient()
 
@@ -31,7 +32,7 @@ async function carregar() {
   carregando.value = true
   let q = supabase
     .from('agendamentos')
-    .select('*, pacientes(nome, cpf, telefone), medicos(nome, especialidade)')
+    .select('*, pacientes(nome, cpf, telefone, unidade_id, unidades(id, nome)), medicos(nome, especialidade)')
     .gte('data_consulta', dataInicio.value)
     .lte('data_consulta', dataFim.value)
     .order('data_consulta', { ascending: true })
@@ -51,9 +52,16 @@ watch(
 )
 
 const filtrados = computed(() => {
+  let lista = ags.value
+
+  // Filtra por unidade no cliente — vem de várias unidades ao mesmo tempo
+  if (props.unidadeFiltro) {
+    lista = lista.filter((a) => (a.pacientes as any)?.unidade_id === props.unidadeFiltro)
+  }
+
   const q = busca.value.trim().toLowerCase()
-  if (!q) return ags.value
-  return ags.value.filter((a) => {
+  if (!q) return lista
+  return lista.filter((a) => {
     const nomePac = (a.pacientes as { nome?: string } | null)?.nome?.toLowerCase() ?? ''
     const cpfPac = (a.pacientes as { cpf?: string } | null)?.cpf ?? ''
     return nomePac.includes(q) || cpfPac.includes(q.replace(/\D/g, ''))
@@ -211,6 +219,9 @@ const PRESETS = [
               <div class="flex items-center gap-2 flex-wrap">
                 <p class="font-semibold text-[var(--color-text)] text-sm">{{ (ag.pacientes as any)?.nome ?? '—' }}</p>
                 <UiBadge :variant="ag.status as any" />
+                <span v-if="(ag.pacientes as any)?.unidades?.nome" class="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style="background:#e8eef8;color:#1e4d9a">
+                  <Building2 :size="10" /> {{ (ag.pacientes as any).unidades.nome }}
+                </span>
               </div>
               <p class="text-xs text-[var(--color-text-muted)] mt-0.5">
                 {{ (ag.medicos as any)?.nome }}

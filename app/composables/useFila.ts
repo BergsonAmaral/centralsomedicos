@@ -24,7 +24,7 @@ export const useFila = () => {
     'id', 'status', 'data_consulta', 'motivo', 'observacoes', 'origem',
     'checkin_em', 'chamado_em', 'encerrado_em', 'triagem', 'sala_slug',
     'paciente_id', 'medico_id', 'created_at',
-    'pacientes(id,nome,cpf,data_nascimento,sexo,telefone,email,sus_cartao,unidade_id)',
+    'pacientes(id,nome,cpf,data_nascimento,sexo,telefone,email,sus_cartao,unidade_id,unidades(id,nome))',
     'medicos(id,nome,especialidade,crm,pausado)',
   ].join(',')
 

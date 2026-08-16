@@ -7,16 +7,23 @@ definePageMeta({ layout: 'admin', middleware: ['auth', 'role'] })
 const supabase = useSupabaseClient()
 const fila = useFila()
 
-// Filtro por médico (compartilhado entre as duas views)
+// Filtros por médico e por unidade (compartilhados entre as duas views)
 const medicos = ref<{ id: string; nome: string }[]>([])
 const medicoFiltro = ref<string>('')
+
+const unidades = ref<{ id: string; nome: string }[]>([])
+const unidadeFiltro = ref<string>('')
 
 // View
 const view = ref<'hoje' | 'agenda'>('hoje')
 
 onMounted(async () => {
-  const { data } = await supabase.from('medicos').select('id, nome').eq('ativo', true)
-  medicos.value = data ?? []
+  const [{ data: mData }, { data: uData }] = await Promise.all([
+    supabase.from('medicos').select('id, nome').eq('ativo', true),
+    supabase.from('unidades').select('id, nome').eq('ativo', true).order('nome'),
+  ])
+  medicos.value = mData ?? []
+  unidades.value = uData ?? []
 
   await fila.carregar(medicoFiltro.value || null)
   fila.subscrever(medicoFiltro.value || null)
@@ -42,9 +49,16 @@ watch(medicoFiltro, async (val) => {
         </p>
       </div>
 
-      <!-- Filtro por médico -->
-      <div class="flex items-center gap-2">
+      <!-- Filtros por médico e unidade -->
+      <div class="flex flex-wrap items-center gap-2">
         <Filter :size="16" class="text-[var(--color-text-muted)]" />
+        <select
+          v-model="unidadeFiltro"
+          class="input-base py-2 text-sm max-w-xs"
+        >
+          <option value="">Todas as unidades</option>
+          <option v-for="u in unidades" :key="u.id" :value="u.id">{{ u.nome }}</option>
+        </select>
         <select
           v-model="medicoFiltro"
           class="input-base py-2 text-sm max-w-xs"
@@ -80,7 +94,7 @@ watch(medicoFiltro, async (val) => {
     </div>
 
     <!-- Conteúdo -->
-    <AdminFilaColunas v-if="view === 'hoje'" :medico-filtro="medicoFiltro || null" />
-    <AdminAgendaCompleta v-else :medico-filtro="medicoFiltro || null" />
+    <AdminFilaColunas v-if="view === 'hoje'" :medico-filtro="medicoFiltro || null" :unidade-filtro="unidadeFiltro || null" />
+    <AdminAgendaCompleta v-else :medico-filtro="medicoFiltro || null" :unidade-filtro="unidadeFiltro || null" />
   </div>
 </template>

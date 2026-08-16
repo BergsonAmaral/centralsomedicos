@@ -59,6 +59,7 @@ export interface Paciente {
   sus_cartao: string | null
   unidade_id: string | null
   created_at: string
+  unidades?: Pick<Unidade, 'id' | 'nome'>
 }
 
 export type AgendamentoStatus =

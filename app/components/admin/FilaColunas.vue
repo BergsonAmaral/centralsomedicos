@@ -1,15 +1,26 @@
 <script setup lang="ts">
-import { UserX, UserCheck, PhoneCall, Eye, Clock, Zap } from 'lucide-vue-next'
+import { UserX, UserCheck, PhoneCall, Eye, Clock, Zap, Building2 } from 'lucide-vue-next'
 import type { Agendamento } from '~/types'
 import { useFila } from '~/composables/useFila'
 
 interface Props {
   medicoFiltro?: string | null
+  unidadeFiltro?: string | null
 }
 
-withDefaults(defineProps<Props>(), { medicoFiltro: null })
+const props = withDefaults(defineProps<Props>(), { medicoFiltro: null, unidadeFiltro: null })
 
 const fila = useFila()
+
+// Com pacientes chegando de várias unidades ao mesmo tempo, filtra por
+// unidade no cliente (o filtro por médico já é feito no servidor).
+function porUnidade(lista: Agendamento[]): Agendamento[] {
+  if (!props.unidadeFiltro) return lista
+  return lista.filter((a) => (a.pacientes as any)?.unidade_id === props.unidadeFiltro)
+}
+const agendadosFiltrados = computed(() => porUnidade(fila.agendados.value))
+const filaAtivaFiltrada = computed(() => porUnidade(fila.filaAtiva.value))
+const finalizadosFiltrados = computed(() => porUnidade(fila.finalizados.value))
 
 // Modais
 const checkinModal = ref<Agendamento | null>(null)
@@ -79,20 +90,25 @@ onUnmounted(() => clearInterval(interval))
     <div class="flex flex-col gap-3">
       <div class="flex items-center justify-between">
         <h3 class="font-semibold text-[var(--color-text)]">Agendados</h3>
-        <span class="badge badge-agendado">{{ fila.agendados.value.length }}</span>
+        <span class="badge badge-agendado">{{ agendadosFiltrados.length }}</span>
       </div>
 
-      <div v-if="fila.agendados.value.length === 0" class="card p-6 text-center text-[var(--color-text-dim)] text-sm">
+      <div v-if="agendadosFiltrados.length === 0" class="card p-6 text-center text-[var(--color-text-dim)] text-sm">
         Nenhum paciente agendado
       </div>
 
       <div
-        v-for="ag in fila.agendados.value"
+        v-for="ag in agendadosFiltrados"
         :key="ag.id"
         class="card p-4 space-y-3"
       >
         <div>
-          <p class="font-semibold text-[var(--color-text)]">{{ ag.pacientes?.nome }}</p>
+          <div class="flex items-center justify-between gap-2">
+            <p class="font-semibold text-[var(--color-text)]">{{ ag.pacientes?.nome }}</p>
+            <span v-if="ag.pacientes?.unidades?.nome" class="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style="background:#e8eef8;color:#1e4d9a">
+              <Building2 :size="10" /> {{ ag.pacientes.unidades.nome }}
+            </span>
+          </div>
           <p class="text-xs text-[var(--color-text-muted)]">{{ ag.medicos?.nome }}</p>
           <p v-if="ag.motivo" class="text-xs text-[var(--color-text-dim)] mt-1 truncate">{{ ag.motivo }}</p>
         </div>
@@ -116,15 +132,15 @@ onUnmounted(() => clearInterval(interval))
     <div class="flex flex-col gap-3">
       <div class="flex items-center justify-between">
         <h3 class="font-semibold text-[var(--color-text)]">Fila Ativa</h3>
-        <span class="badge badge-checkin">{{ fila.filaAtiva.value.length }}</span>
+        <span class="badge badge-checkin">{{ filaAtivaFiltrada.length }}</span>
       </div>
 
-      <div v-if="fila.filaAtiva.value.length === 0" class="card p-6 text-center text-[var(--color-text-dim)] text-sm">
+      <div v-if="filaAtivaFiltrada.length === 0" class="card p-6 text-center text-[var(--color-text-dim)] text-sm">
         Nenhum na fila
       </div>
 
       <div
-        v-for="(ag, index) in fila.filaAtiva.value"
+        v-for="(ag, index) in filaAtivaFiltrada"
         :key="ag.id"
         :class="[
           'card p-4 space-y-3',
@@ -140,9 +156,14 @@ onUnmounted(() => clearInterval(interval))
               <p class="font-semibold text-[var(--color-text)] truncate">{{ ag.pacientes?.nome }}</p>
             </div>
             <p class="text-xs text-[var(--color-text-muted)]">{{ ag.medicos?.nome }}</p>
-            <div class="flex items-center gap-1 mt-1 text-xs text-[var(--color-text-dim)]">
-              <Clock :size="11" />
-              {{ horaFormatada(ag.checkin_em) }} · {{ tempoEspera(ag.checkin_em) }} espera
+            <div class="flex items-center gap-2 mt-1 flex-wrap">
+              <span v-if="ag.pacientes?.unidades?.nome" class="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style="background:#e8eef8;color:#1e4d9a">
+                <Building2 :size="10" /> {{ ag.pacientes.unidades.nome }}
+              </span>
+              <div class="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
+                <Clock :size="11" />
+                {{ horaFormatada(ag.checkin_em) }} · {{ tempoEspera(ag.checkin_em) }} espera
+              </div>
             </div>
           </div>
           <div class="flex flex-col gap-1 shrink-0">
@@ -183,21 +204,26 @@ onUnmounted(() => clearInterval(interval))
     <div class="flex flex-col gap-3">
       <div class="flex items-center justify-between">
         <h3 class="font-semibold text-[var(--color-text)]">Finalizados Hoje</h3>
-        <span class="badge badge-concluido">{{ fila.finalizados.value.length }}</span>
+        <span class="badge badge-concluido">{{ finalizadosFiltrados.length }}</span>
       </div>
 
-      <div v-if="fila.finalizados.value.length === 0" class="card p-6 text-center text-[var(--color-text-dim)] text-sm">
+      <div v-if="finalizadosFiltrados.length === 0" class="card p-6 text-center text-[var(--color-text-dim)] text-sm">
         Nenhum finalizado
       </div>
 
       <div
-        v-for="ag in fila.finalizados.value"
+        v-for="ag in finalizadosFiltrados"
         :key="ag.id"
         class="card p-4 space-y-2"
       >
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0 flex-1">
-            <p class="font-medium text-[var(--color-text)] truncate text-sm">{{ ag.pacientes?.nome }}</p>
+            <div class="flex items-center gap-2">
+              <p class="font-medium text-[var(--color-text)] truncate text-sm">{{ ag.pacientes?.nome }}</p>
+              <span v-if="ag.pacientes?.unidades?.nome" class="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style="background:#e8eef8;color:#1e4d9a">
+                <Building2 :size="10" /> {{ ag.pacientes.unidades.nome }}
+              </span>
+            </div>
             <p class="text-xs text-[var(--color-text-muted)]">{{ ag.medicos?.nome }}</p>
             <p class="text-xs text-[var(--color-text-dim)] mt-0.5">
               {{ horaFormatada(ag.chamado_em) }} → {{ horaFormatada(ag.encerrado_em) }}
