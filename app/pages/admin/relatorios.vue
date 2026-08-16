@@ -47,7 +47,7 @@ const totalConsultas = ref(0)
 const horasTotaisAtendidas = ref(0)
 const tempoMedioEspera = ref(0)
 const tempoMedioConsulta = ref(0)
-const consultasPorMedico = ref<{ nome: string; total: number; concluidas: number; faltaram: number; minutos: number; horasFmt: string }[]>([])
+const consultasPorMedico = ref<{ nome: string; total: number; concluidas: number; faltaram: number; minutos: number; horasFmt: string; comDuracao: number; mediaMin: number }[]>([])
 const topPacientes = ref<{ nome: string; total: number }[]>([])
 const C_PP = 15
 const cPagMed = ref(1)
@@ -69,7 +69,7 @@ async function carregarConsultas() {
   const porMedico: Record<string, any> = {}
   agendamentos.forEach(a => {
     const nome = (a.medicos as any)?.nome ?? 'Desconhecido'
-    if (!porMedico[a.medico_id]) porMedico[a.medico_id] = { nome, total: 0, concluidas: 0, faltaram: 0, minutos: 0, horasFmt: '0min' }
+    if (!porMedico[a.medico_id]) porMedico[a.medico_id] = { nome, total: 0, concluidas: 0, faltaram: 0, minutos: 0, horasFmt: '0min', comDuracao: 0, mediaMin: 0 }
     porMedico[a.medico_id].total++
     if (a.status === 'concluido') porMedico[a.medico_id].concluidas++
     if (a.status === 'faltou') porMedico[a.medico_id].faltaram++
@@ -86,14 +86,20 @@ async function carregarConsultas() {
   const porPaciente: Record<string, any> = {}
   lst.forEach((c: any) => {
     const min = c.duracao_minutos ?? 0; totalMin += min
-    if (c.medico_id && porMedico[c.medico_id]) porMedico[c.medico_id].minutos += min
+    if (c.medico_id && porMedico[c.medico_id]) {
+      porMedico[c.medico_id].minutos += min
+      if (min > 0) porMedico[c.medico_id].comDuracao++
+    }
     if (c.paciente_id) {
       const nome = (c.pacientes as any)?.nome ?? 'Desconhecido'
       if (!porPaciente[c.paciente_id]) porPaciente[c.paciente_id] = { nome, total: 0 }
       porPaciente[c.paciente_id].total++
     }
   })
-  Object.values(porMedico).forEach((m: any) => { m.horasFmt = fmtHoras(m.minutos) })
+  Object.values(porMedico).forEach((m: any) => {
+    m.horasFmt = fmtHoras(m.minutos)
+    m.mediaMin = m.comDuracao ? Math.round(m.minutos / m.comDuracao) : 0
+  })
   consultasPorMedico.value = Object.values(porMedico).sort((a: any, b: any) => b.concluidas - a.concluidas)
   horasTotaisAtendidas.value = totalMin
   topPacientes.value = Object.values(porPaciente).sort((a: any, b: any) => b.total - a.total)
@@ -201,8 +207,8 @@ watch(abaAtiva, v => {
 
 function exportarCSV() {
   const linhas = [
-    ['Médico', 'Total', 'Concluídos', 'Faltaram', 'Minutos', 'Tempo total'],
-    ...consultasPorMedico.value.map(m => [m.nome, m.total, m.concluidas, m.faltaram, m.minutos, m.horasFmt]),
+    ['Médico', 'Total', 'Concluídos', 'Faltaram', 'Minutos', 'Tempo total', 'Tempo médio (min)'],
+    ...consultasPorMedico.value.map(m => [m.nome, m.total, m.concluidas, m.faltaram, m.minutos, m.horasFmt, m.mediaMin]),
   ]
   const csv = linhas.map(l => l.join(',')).join('\n')
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -296,7 +302,7 @@ function exportarCSV() {
           <table class="w-full text-sm">
             <thead>
               <tr style="background:var(--color-surface-2);border-bottom:1px solid var(--color-border-light)">
-                <th v-for="col in ['Médico','Total','Concluídas','Faltaram','Tempo']" :key="col"
+                <th v-for="col in ['Médico','Total','Concluídas','Faltaram','Tempo total','Tempo médio']" :key="col"
                   class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide" style="color:var(--color-text-muted)">{{ col }}</th>
               </tr>
             </thead>
@@ -307,9 +313,10 @@ function exportarCSV() {
                 <td class="px-4 py-3"><span class="text-xs font-semibold px-2 py-0.5 rounded-full" style="background:#dcfce7;color:#16a34a">{{ m.concluidas }}</span></td>
                 <td class="px-4 py-3"><span class="text-xs font-semibold px-2 py-0.5 rounded-full" style="background:#fee2e2;color:#dc2626">{{ m.faltaram }}</span></td>
                 <td class="px-4 py-3 text-[var(--color-text-muted)]">{{ m.horasFmt }}</td>
+                <td class="px-4 py-3 text-[var(--color-text-muted)]">{{ m.mediaMin ? `${m.mediaMin}min` : '—' }}</td>
               </tr>
               <tr v-if="!cMedicosPag.length">
-                <td colspan="5" class="px-4 py-8 text-center text-sm" style="color:var(--color-text-muted)">Nenhum dado no período</td>
+                <td colspan="6" class="px-4 py-8 text-center text-sm" style="color:var(--color-text-muted)">Nenhum dado no período</td>
               </tr>
             </tbody>
           </table>
