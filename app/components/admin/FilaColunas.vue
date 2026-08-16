@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UserX, UserCheck, PhoneCall, Eye, Clock, Zap, Building2 } from 'lucide-vue-next'
+import { UserX, UserCheck, PhoneCall, Eye, Clock, Zap, Building2, Undo2, Ban } from 'lucide-vue-next'
 import type { Agendamento } from '~/types'
 import { useFila } from '~/composables/useFila'
 
@@ -11,6 +11,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), { medicoFiltro: null, unidadeFiltro: null })
 
 const fila = useFila()
+const toast = useToast()
 
 // Com pacientes chegando de várias unidades ao mesmo tempo, filtra por
 // unidade no cliente (o filtro por médico já é feito no servidor).
@@ -69,10 +70,48 @@ async function confirmarFaltou(id: string) {
     const { error } = await fila.marcarFaltou(id)
     if (error) throw new Error(error.message)
     await fila.carregar()
+    toast.sucesso('Paciente marcado como falta.')
   } catch (e: any) {
-    alert('Erro ao marcar faltou: ' + (e?.message ?? 'tente novamente'))
+    toast.erro('Erro ao marcar faltou: ' + (e?.message ?? 'tente novamente'))
   } finally {
     marcandoFaltou.value = null
+  }
+}
+
+// ── Autonomia do admin sobre atendimentos já encaminhados ──────────
+// Sem isso, um paciente encaminhado ficava preso: se o médico não
+// respondia ou o paciente desistia, não havia como desfazer.
+const revertendo = ref<string | null>(null)
+
+async function voltarParaFila(ag: Agendamento) {
+  const nome = ag.pacientes?.nome ?? 'este paciente'
+  if (!confirm(`Cancelar o encaminhamento e devolver ${nome} para a fila?`)) return
+  revertendo.value = ag.id
+  try {
+    const { error } = await fila.voltarParaFila(ag.id)
+    if (error) throw new Error(error.message)
+    await fila.carregar()
+    toast.sucesso('Paciente devolvido para a fila.')
+  } catch (e: any) {
+    toast.erro('Erro ao devolver para a fila: ' + (e?.message ?? 'tente novamente'))
+  } finally {
+    revertendo.value = null
+  }
+}
+
+async function cancelarAtendimento(ag: Agendamento) {
+  const nome = ag.pacientes?.nome ?? 'este paciente'
+  if (!confirm(`Cancelar definitivamente o atendimento de ${nome}?`)) return
+  revertendo.value = ag.id
+  try {
+    const { error } = await fila.cancelarAtendimento(ag.id)
+    if (error) throw new Error(error.message)
+    await fila.carregar()
+    toast.sucesso('Atendimento cancelado.')
+  } catch (e: any) {
+    toast.erro('Erro ao cancelar: ' + (e?.message ?? 'tente novamente'))
+  } finally {
+    revertendo.value = null
   }
 }
 const tick = ref(0)
@@ -112,15 +151,24 @@ onUnmounted(() => clearInterval(interval))
           <p class="text-xs text-[var(--color-text-muted)]">{{ ag.medicos?.nome }}</p>
           <p v-if="ag.motivo" class="text-xs text-[var(--color-text-dim)] mt-1 truncate">{{ ag.motivo }}</p>
         </div>
-        <div class="flex gap-2">
-          <UiButton variant="ghost" size="sm" title="Entrada rápida (sem triagem)" :loading="entradaDireta === ag.id" @click="fazerEntradaDireta(ag)">
-            <Zap :size="14" style="color:#f59e0b" />
-          </UiButton>
-          <UiButton variant="primary" size="sm" class="flex-1" @click="checkinModal = ag">
-            <UserCheck :size="14" /> Check-in
-          </UiButton>
-          <UiButton variant="ghost" size="sm" @click="confirmarFaltou(ag.id)" :loading="marcandoFaltou === ag.id">
-            <UserX :size="14" />
+        <div class="space-y-2">
+          <div class="flex gap-2">
+            <UiButton variant="primary" size="sm" class="flex-1" title="Check-in com triagem e sinais vitais" @click="checkinModal = ag">
+              <UserCheck :size="14" /> Check-in
+            </UiButton>
+            <UiButton variant="ghost" size="sm" title="Marcar como falta" @click="confirmarFaltou(ag.id)" :loading="marcandoFaltou === ag.id">
+              <UserX :size="14" />
+            </UiButton>
+          </div>
+          <UiButton
+            variant="ghost"
+            size="sm"
+            class="w-full"
+            title="Coloca o paciente direto na fila, pulando a triagem"
+            :loading="entradaDireta === ag.id"
+            @click="fazerEntradaDireta(ag)"
+          >
+            <Zap :size="13" style="color:#f59e0b" /> Entrada rápida (sem triagem)
           </UiButton>
         </div>
       </div>
@@ -182,18 +230,42 @@ onUnmounted(() => clearInterval(interval))
         >
           <PhoneCall :size="14" /> Encaminhar →
         </UiButton>
-        <div
-          v-else
-          class="w-full text-center text-xs font-semibold py-2 rounded-lg"
-          :style="ag.status === 'em_consulta'
-            ? 'background:#dcfce7;color:#166534'
-            : 'background:#fef9c3;color:#854d0e'"
-        >
-          {{
-            ag.status === 'aguardando_medico' ? 'Chamando médico…'
-            : ag.status === 'aguardando_paciente' ? 'Aguardando paciente entrar…'
-            : 'Em consulta'
-          }}
+
+        <!-- Já encaminhado: mostra o status e mantém o controle com o admin -->
+        <div v-else class="space-y-2">
+          <div
+            class="w-full text-center text-xs font-semibold py-2 rounded-lg"
+            :style="ag.status === 'em_consulta'
+              ? 'background:#dcfce7;color:#166534'
+              : 'background:#fef9c3;color:#854d0e'"
+          >
+            {{
+              ag.status === 'aguardando_medico' ? 'Chamando médico…'
+              : ag.status === 'aguardando_paciente' ? 'Aguardando paciente entrar…'
+              : 'Em consulta'
+            }}
+          </div>
+          <div class="flex gap-2">
+            <UiButton
+              variant="ghost"
+              size="sm"
+              class="flex-1"
+              title="Desfaz o encaminhamento e devolve o paciente para a fila"
+              :loading="revertendo === ag.id"
+              @click="voltarParaFila(ag)"
+            >
+              <Undo2 :size="13" /> Voltar p/ fila
+            </UiButton>
+            <UiButton
+              variant="ghost"
+              size="sm"
+              title="Cancelar definitivamente este atendimento"
+              :loading="revertendo === ag.id"
+              @click="cancelarAtendimento(ag)"
+            >
+              <Ban :size="13" style="color:#dc2626" />
+            </UiButton>
+          </div>
         </div>
       </div>
     </div>

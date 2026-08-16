@@ -5,6 +5,7 @@ import type { Unidade, Sala } from '~/types'
 definePageMeta({ layout: 'admin', middleware: ['auth', 'role'] })
 
 const supabase = useSupabaseClient()
+const toast = useToast()
 
 const unidades = ref<Unidade[]>([])
 const salas = ref<Sala[]>([])
@@ -135,10 +136,13 @@ async function salvar() {
       ? await supabase.from('salas').update(payload).eq('id', editando.value.id)
       : await supabase.from('salas').insert(payload)
     if (error) throw new Error(error.message.includes('duplicate') ? 'Já existe uma sala com esse slug.' : error.message)
+    const eraEdicao = !!editando.value
     modalAberto.value = false
     await carregar()
+    toast.sucesso(eraEdicao ? 'Sala atualizada com sucesso!' : 'Sala cadastrada com sucesso!')
   } catch (e: any) {
     erro.value = e?.message ?? 'Erro ao salvar sala.'
+    toast.erro(erro.value)
   } finally {
     salvando.value = false
   }
@@ -148,9 +152,11 @@ const excluindo = ref<string | null>(null)
 async function excluir(s: Sala) {
   if (!confirm(`Remover a sala "${s.nome}"?`)) return
   excluindo.value = s.id
-  await supabase.from('salas').delete().eq('id', s.id)
+  const { error } = await supabase.from('salas').delete().eq('id', s.id)
   await carregar()
   excluindo.value = null
+  if (error) { toast.erro('Erro ao remover sala: ' + error.message); return }
+  toast.sucesso('Sala removida.')
 }
 </script>
 

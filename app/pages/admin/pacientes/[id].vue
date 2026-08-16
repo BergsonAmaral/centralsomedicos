@@ -5,6 +5,7 @@ import type { Paciente, Agendamento, Documento, AgendamentoStatus } from '~/type
 definePageMeta({ layout: 'admin', middleware: ['auth', 'role'] })
 
 const supabase = useSupabaseClient()
+const toast = useToast()
 const { resolverUrlAssinada } = useDocumentos()
 const route = useRoute()
 
@@ -109,7 +110,7 @@ function calcularIdade(dataNasc: string | null): number | null {
 async function salvarDados() {
   if (!paciente.value) return
   salvando.value = true
-  await supabase.from('pacientes').update({
+  const { error } = await supabase.from('pacientes').update({
     nome: paciente.value.nome,
     telefone: paciente.value.telefone,
     email: paciente.value.email,
@@ -117,6 +118,8 @@ async function salvarDados() {
     unidade_id: (paciente.value as any).unidade_id || null,
   }).eq('id', id)
   salvando.value = false
+  if (error) { toast.erro('Erro ao salvar: ' + error.message); return }
+  toast.sucesso('Dados do paciente salvos!')
 }
 
 // Novo agendamento manual

@@ -4,6 +4,7 @@ import { Building2, Plus, Pencil, Trash2, Users2 } from 'lucide-vue-next'
 definePageMeta({ layout: 'admin', middleware: ['auth', 'role'] })
 
 const supabase = useSupabaseClient()
+const toast = useToast()
 
 interface Unidade {
   id: string
@@ -77,10 +78,13 @@ async function salvar() {
       ? await supabase.from('unidades').update(payload).eq('id', editando.value.id)
       : await supabase.from('unidades').insert(payload)
     if (error) throw new Error(error.message)
+    const eraEdicao = !!editando.value
     modalAberto.value = false
     await carregar()
+    toast.sucesso(eraEdicao ? 'Unidade atualizada com sucesso!' : 'Unidade cadastrada com sucesso!')
   } catch (e: any) {
     erro.value = e?.message ?? 'Erro ao salvar unidade.'
+    toast.erro(erro.value)
   } finally {
     salvando.value = false
   }
@@ -90,9 +94,11 @@ const excluindo = ref<string | null>(null)
 async function excluir(u: Unidade) {
   if (!confirm(`Remover a unidade "${u.nome}"? Pacientes vinculados ficam sem unidade.`)) return
   excluindo.value = u.id
-  await supabase.from('unidades').delete().eq('id', u.id)
+  const { error } = await supabase.from('unidades').delete().eq('id', u.id)
   await carregar()
   excluindo.value = null
+  if (error) { toast.erro('Erro ao remover unidade: ' + error.message); return }
+  toast.sucesso('Unidade removida.')
 }
 </script>
 

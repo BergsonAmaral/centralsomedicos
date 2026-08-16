@@ -7,6 +7,7 @@ import { z } from 'zod'
 definePageMeta({ layout: 'admin', middleware: ['auth', 'role'] })
 
 const supabase = useSupabaseClient()
+const toast = useToast()
 const route = useRoute()
 const id = route.params.id as string
 const isNovo = id === 'novo'
@@ -141,9 +142,11 @@ const onSubmit = handleSubmit(async (values) => {
       } catch {}
     }
 
+    toast.sucesso(isNovo ? 'Médico cadastrado com sucesso!' : 'Alterações salvas com sucesso!')
     navigateTo('/admin/medicos')
   } catch (e: any) {
     erro.value = e.message ?? 'Erro ao salvar médico.'
+    toast.erro(erro.value)
   } finally {
     salvando.value = false
   }
@@ -151,7 +154,9 @@ const onSubmit = handleSubmit(async (values) => {
 
 async function desativarMedico() {
   if (!confirm('Desativar este médico? Ele não poderá mais fazer login nem aparecer na fila.')) return
-  await supabase.from('medicos').update({ ativo: false }).eq('id', id)
+  const { error } = await supabase.from('medicos').update({ ativo: false }).eq('id', id)
+  if (error) { toast.erro('Erro ao desativar médico: ' + error.message); return }
+  toast.sucesso('Médico desativado.')
   navigateTo('/admin/medicos')
 }
 
@@ -159,7 +164,9 @@ async function excluirMedico() {
   if (!confirm('ATENÇÃO: Excluir o médico permanentemente? Todos os agendamentos e documentos associados serão removidos. Esta ação não pode ser desfeita.')) return
   await supabase.from('documentos').delete().eq('medico_id', id)
   await supabase.from('agendamentos').delete().eq('medico_id', id)
-  await supabase.from('medicos').delete().eq('id', id)
+  const { error } = await supabase.from('medicos').delete().eq('id', id)
+  if (error) { toast.erro('Erro ao excluir médico: ' + error.message); return }
+  toast.sucesso('Médico excluído.')
   navigateTo('/admin/medicos')
 }
 </script>

@@ -64,19 +64,23 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
           @click="onBackdrop"
         />
 
-        <!-- Painel -->
+        <!-- Painel.
+             max-height + flex-col garantem que conteúdo alto (ex: check-in
+             com triagem + sinais vitais) role dentro do corpo, em vez de
+             estourar a tela e ficar cortado em cima e embaixo. -->
         <div
           :class="[
             'relative w-full bg-[var(--color-surface)] rounded-2xl shadow-[var(--shadow-lg)]',
             'border border-[var(--color-border)]',
-            'animate-slide-up',
+            'animate-slide-up flex flex-col',
             sizeClasses,
           ]"
+          style="max-height: calc(100vh - 2rem); max-height: calc(100dvh - 2rem)"
         >
-          <!-- Header -->
+          <!-- Header (fixo) -->
           <div
             v-if="title || $slots.header"
-            class="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border-light)]"
+            class="shrink-0 flex items-center justify-between px-6 py-4 border-b border-[var(--color-border-light)]"
           >
             <slot name="header">
               <h2 class="text-lg font-bold text-[var(--color-text)]">{{ title }}</h2>
@@ -89,15 +93,15 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
             </button>
           </div>
 
-          <!-- Corpo -->
-          <div class="px-6 py-5">
+          <!-- Corpo (rolável) -->
+          <div class="px-6 py-5 overflow-y-auto flex-1 min-h-0">
             <slot />
           </div>
 
-          <!-- Footer -->
+          <!-- Footer (fixo) -->
           <div
             v-if="$slots.footer"
-            class="px-6 py-4 border-t border-[var(--color-border-light)] flex justify-end gap-3"
+            class="shrink-0 px-6 py-4 border-t border-[var(--color-border-light)] flex justify-end gap-3"
           >
             <slot name="footer" />
           </div>

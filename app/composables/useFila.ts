@@ -148,6 +148,26 @@ export const useFila = () => {
       .in('status', ['agendado', 'checkin'])
   }
 
+  // ADMIN desfaz o encaminhamento → paciente volta para a fila.
+  // Serve quando o médico não responde, o paciente desiste ou o
+  // atendimento trava em algum estado intermediário.
+  async function voltarParaFila(id: string) {
+    return supabase
+      .from('agendamentos')
+      .update({ status: 'checkin', chamado_em: null })
+      .eq('id', id)
+      .in('status', ['aguardando_medico', 'aguardando_paciente', 'em_consulta'])
+  }
+
+  // ADMIN cancela o atendimento de vez, de qualquer estado ativo.
+  async function cancelarAtendimento(id: string) {
+    return supabase
+      .from('agendamentos')
+      .update({ status: 'cancelado', encerrado_em: new Date().toISOString() })
+      .eq('id', id)
+      .in('status', ['agendado', 'checkin', 'aguardando_medico', 'aguardando_paciente', 'em_consulta'])
+  }
+
   function subscrever(medicoId?: string | null) {
     if (channel) supabase.removeChannel(channel)
 
@@ -197,6 +217,8 @@ export const useFila = () => {
     entrarConsulta,
     encerrar,
     marcarFaltou,
+    voltarParaFila,
+    cancelarAtendimento,
     subscrever,
     desinscrever,
   }
