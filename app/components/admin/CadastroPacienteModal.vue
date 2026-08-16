@@ -9,6 +9,8 @@ const adminLog = useAdminLog()
 const erro = ref('')
 const salvando = ref(false)
 const sucesso = ref(false)
+// CPF já existia e o nome confere → aproveitou o cadastro, não criou um novo
+const reusouExistente = ref(false)
 
 // Dados do paciente
 const nome = ref('')
@@ -90,8 +92,19 @@ async function salvar() {
     let pacienteNome = nome.value.trim()
 
     if (existente) {
+      // CPF já cadastrado. Antes o sistema reusava esse paciente em silêncio
+      // e ainda dizia "cadastrado com sucesso" — se o CPF fosse digitado
+      // errado, o agendamento ia parar no prontuário de outra pessoa.
+      const nomeDigitado = nome.value.trim().toLowerCase()
+      if (existente.nome.trim().toLowerCase() !== nomeDigitado) {
+        erro.value = `Este CPF já está cadastrado para "${existente.nome}". `
+          + 'Confira o número digitado ou use a busca para abrir o cadastro existente.'
+        salvando.value = false
+        return
+      }
       pacienteId = existente.id
       pacienteNome = existente.nome
+      reusouExistente.value = true
     } else {
       // 2. Criar paciente
       const { data: novo, error: errPac } = await supabase
@@ -171,7 +184,12 @@ async function salvar() {
       <div class="w-14 h-14 rounded-full mx-auto flex items-center justify-center mb-3" style="background:#dcfce7">
         <UserPlus :size="26" style="color:#16a34a" />
       </div>
-      <p class="font-semibold text-[var(--color-text)]">Paciente cadastrado com sucesso</p>
+      <p class="font-semibold text-[var(--color-text)]">
+        {{ reusouExistente ? 'Paciente já cadastrado — dados reaproveitados' : 'Paciente cadastrado com sucesso' }}
+      </p>
+      <p v-if="reusouExistente" class="text-xs mt-1" style="color:var(--color-text-muted)">
+        Encontramos este CPF na base e usamos o cadastro existente.
+      </p>
     </div>
 
     <div v-else class="space-y-5">

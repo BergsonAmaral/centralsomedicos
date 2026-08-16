@@ -28,7 +28,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody(event)
-  const { nome, crm, especialidade, email, senha, foto_url, valor_consulta, sala_slug } = body
+  const { nome, crm, especialidade, email, senha, foto_url, valor_consulta } = body
 
   if (!email || !senha || !nome || !crm || !especialidade) {
     throw createError({ statusCode: 400, message: 'Campos obrigatórios faltando' })
@@ -51,7 +51,14 @@ export default defineEventHandler(async (event) => {
   })
 
   if (createAuthError) {
-    throw createError({ statusCode: 400, message: createAuthError.message })
+    // O Supabase responde em inglês; traduz o caso mais comum
+    const jaExiste = /already been registered|already exists/i.test(createAuthError.message)
+    throw createError({
+      statusCode: 400,
+      message: jaExiste
+        ? 'Este e-mail já está cadastrado para outro usuário.'
+        : createAuthError.message,
+    })
   }
 
   const userId = authData.user.id
@@ -76,7 +83,6 @@ export default defineEventHandler(async (event) => {
       ativo: true,
       pausado: false,
       valor_consulta: valor_consulta ?? 0,
-      sala_slug: sala_slug || null,
     })
 
     if (medicoError) throw medicoError
@@ -85,6 +91,15 @@ export default defineEventHandler(async (event) => {
   } catch (err: any) {
     // Rollback: deletar usuário criado se algo falhou
     await admin.auth.admin.deleteUser(userId)
-    throw createError({ statusCode: 500, message: err.message ?? 'Erro ao cadastrar médico' })
+
+    // Erros de constraint do Postgres são ilegíveis para quem está usando
+    // o sistema ("duplicate key value violates unique constraint ...")
+    const bruto = err?.message ?? ''
+    let amigavel = bruto || 'Erro ao cadastrar médico'
+    if (/duplicate key/i.test(bruto)) {
+      if (/crm/i.test(bruto)) amigavel = 'Já existe um médico cadastrado com este CRM.'
+      else amigavel = 'Já existe um cadastro com esses dados.'
+    }
+    throw createError({ statusCode: 400, message: amigavel })
   }
 })
