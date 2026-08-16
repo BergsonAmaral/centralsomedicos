@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UserX, UserCheck, PhoneCall, Eye, Clock, Zap, Building2, Undo2, Ban } from 'lucide-vue-next'
+import { UserX, UserCheck, PhoneCall, Eye, Clock, Zap, Building2, Undo2, Ban, Pencil } from 'lucide-vue-next'
 import type { Agendamento } from '~/types'
 import { useFila } from '~/composables/useFila'
 
@@ -221,15 +221,25 @@ onUnmounted(() => clearInterval(interval))
           </div>
         </div>
 
-        <UiButton
-          v-if="ag.status === 'checkin'"
-          variant="success"
-          size="sm"
-          class="w-full"
-          @click="chamarModal = ag"
-        >
-          <PhoneCall :size="14" /> Encaminhar →
-        </UiButton>
+        <!-- Ainda na fila: dá para corrigir a triagem antes de encaminhar -->
+        <div v-if="ag.status === 'checkin'" class="flex gap-2">
+          <UiButton
+            variant="success"
+            size="sm"
+            class="flex-1"
+            @click="chamarModal = ag"
+          >
+            <PhoneCall :size="14" /> Encaminhar →
+          </UiButton>
+          <UiButton
+            variant="ghost"
+            size="sm"
+            title="Editar triagem, sinais vitais e sala"
+            @click="checkinModal = ag"
+          >
+            <Pencil :size="13" />
+          </UiButton>
+        </div>
 
         <!-- Já encaminhado: mostra o status e mantém o controle com o admin -->
         <div v-else class="space-y-2">

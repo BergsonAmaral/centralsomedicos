@@ -13,6 +13,7 @@ const emit = defineEmits<{ close: [] }>()
 
 const supabase = useSupabaseClient()
 const fila = useFila()
+const toast = useToast()
 const carregando = ref(false)
 
 const bt = useDispositivosBT()
@@ -40,21 +41,28 @@ const dispositivosConfig: { tipo: TipoDispositivo; label: string; icone: any; co
   { tipo: 'bioimpedancia', label: 'Bioimpedância',    icone: Scale,       cor: '#0891b2' },
 ]
 
+// Paciente já em check-in → estamos editando o que já foi registrado,
+// não criando do zero. Pré-carrega a triagem salva para permitir corrigir
+// um valor errado sem perder o resto.
+const modoEdicao = computed(() => props.agendamento.status === 'checkin')
+
+const triagemSalva = (props.agendamento.triagem ?? {}) as Record<string, any>
+
 const triagem = ref({
-  alergia: false,
-  febre: false,
-  urgencia: false,
-  obs: '',
-  pressao_sistolica: null as number | null,
-  pressao_diastolica: null as number | null,
-  pulso: null as number | null,
-  temperatura: null as number | null,
-  saturacao: null as number | null,
-  peso: null as number | null,
-  altura: null as number | null,
-  glicemia: null as number | null,
-  gordura_percentual: null as number | null,
-  imc: null as number | null,
+  alergia: triagemSalva.alergia ?? false,
+  febre: triagemSalva.febre ?? false,
+  urgencia: triagemSalva.urgencia ?? false,
+  obs: triagemSalva.obs ?? '',
+  pressao_sistolica: (triagemSalva.pressao_sistolica ?? null) as number | null,
+  pressao_diastolica: (triagemSalva.pressao_diastolica ?? null) as number | null,
+  pulso: (triagemSalva.pulso ?? null) as number | null,
+  temperatura: (triagemSalva.temperatura ?? null) as number | null,
+  saturacao: (triagemSalva.saturacao ?? null) as number | null,
+  peso: (triagemSalva.peso ?? null) as number | null,
+  altura: (triagemSalva.altura ?? null) as number | null,
+  glicemia: (triagemSalva.glicemia ?? null) as number | null,
+  gordura_percentual: (triagemSalva.gordura_percentual ?? null) as number | null,
+  imc: (triagemSalva.imc ?? null) as number | null,
 })
 
 interface MedicoOpcao { id: string; nome: string; especialidade: string; pausado: boolean }
@@ -65,7 +73,7 @@ const ocupadoIds = ref<Set<string>>(new Set())
 const medicoSelecionadoId = ref<string | null>(props.agendamento.medico_id ?? null)
 
 const salas = ref<SalaOpcao[]>([])
-const salaSelecionadaSlug = ref<string | null>(null)
+const salaSelecionadaSlug = ref<string | null>(props.agendamento.sala_slug ?? null)
 
 onMounted(async () => {
   const hoje = new Date()
@@ -84,7 +92,10 @@ onMounted(async () => {
   medicos.value = mData ?? []
   ocupadoIds.value = new Set((ocupData ?? []).map((a) => a.medico_id))
   salas.value = sData ?? []
-  if (salas.value.length === 1) salaSelecionadaSlug.value = salas.value[0]?.slug ?? null
+  // Só pré-seleciona a única sala se ainda não houver uma definida
+  if (!salaSelecionadaSlug.value && salas.value.length === 1) {
+    salaSelecionadaSlug.value = salas.value[0]?.slug ?? null
+  }
 })
 
 function disponivel(m: MedicoOpcao): boolean {
@@ -110,21 +121,33 @@ const cpfFormatado = computed(() => {
 async function confirmar() {
   carregando.value = true
   try {
-    // Faz check-in com triagem, já registrando em qual sala da unidade o
-    // paciente está fisicamente
+    // Faz/atualiza o check-in com triagem, já registrando em qual sala da
+    // unidade o paciente está fisicamente
     const { error: errCheckin } = await fila.fazerCheckin(props.agendamento.id, triagem.value, salaSelecionadaSlug.value)
     if (errCheckin) throw new Error(errCheckin.message)
 
-    // Se médico já selecionado, chama direto (entra na fila ativa como aguardando_medico)
-    if (medicoSelecionadoId.value) {
+    if (modoEdicao.value) {
+      // Editando alguém que já está na fila: só corrige os dados. Encaminhar
+      // é uma decisão à parte (botão "Encaminhar →"), senão salvar uma
+      // correção de triagem mandaria o paciente para o médico sem querer.
+      if (medicoSelecionadoId.value && medicoSelecionadoId.value !== props.agendamento.medico_id) {
+        const { error: errMedico } = await supabase
+          .from('agendamentos')
+          .update({ medico_id: medicoSelecionadoId.value })
+          .eq('id', props.agendamento.id)
+        if (errMedico) throw new Error(errMedico.message)
+      }
+    } else if (medicoSelecionadoId.value) {
+      // Check-in inicial com médico escolhido → já encaminha
       const { error: errChamar } = await fila.chamar(props.agendamento.id, medicoSelecionadoId.value)
       if (errChamar) throw new Error(errChamar.message)
     }
 
     await fila.carregar()
+    toast.sucesso(modoEdicao.value ? 'Check-in atualizado!' : 'Check-in realizado!')
     emit('close')
   } catch (e: any) {
-    alert('Erro ao fazer check-in: ' + (e?.message ?? 'tente novamente'))
+    toast.erro('Erro ao salvar check-in: ' + (e?.message ?? 'tente novamente'))
   } finally {
     carregando.value = false
   }
@@ -132,7 +155,7 @@ async function confirmar() {
 </script>
 
 <template>
-  <UiModal :model-value="true" title="Fazer Check-in" size="md" @update:model-value="emit('close')">
+  <UiModal :model-value="true" :title="modoEdicao ? 'Editar Check-in' : 'Fazer Check-in'" size="md" @update:model-value="emit('close')">
     <div class="space-y-5">
       <!-- Dados do paciente (somente leitura) -->
       <div class="p-4 rounded-xl bg-[var(--color-surface-2)] border border-[var(--color-border-light)]">
@@ -171,7 +194,10 @@ async function confirmar() {
           Nenhum médico disponível no momento.
         </p>
       </div>
-      <p v-if="!medicoSelecionadoId" class="text-xs text-[var(--color-text-muted)] -mt-1">
+      <p v-if="modoEdicao" class="text-xs text-[var(--color-text-muted)] -mt-1">
+        O paciente continua na fila — para enviá-lo ao médico use o botão <strong>Encaminhar</strong>.
+      </p>
+      <p v-else-if="!medicoSelecionadoId" class="text-xs text-[var(--color-text-muted)] -mt-1">
         Se não selecionar médico, o paciente ficará em check-in aguardando ser chamado manualmente.
       </p>
 
@@ -439,7 +465,7 @@ async function confirmar() {
       <UiButton variant="ghost" @click="emit('close')">Cancelar</UiButton>
       <UiButton variant="success" :loading="carregando" @click="confirmar">
         <UserCheck :size="16" />
-        Confirmar Check-in
+        {{ modoEdicao ? 'Salvar alterações' : 'Confirmar Check-in' }}
       </UiButton>
     </template>
   </UiModal>
