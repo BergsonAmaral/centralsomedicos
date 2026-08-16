@@ -209,13 +209,13 @@ async function excluir(s: Sala) {
     <!-- Lista por unidade -->
     <div v-else class="space-y-6">
       <div v-for="u in unidades" :key="u.id">
-        <div class="flex items-center justify-between mb-3">
-          <div class="flex items-center gap-2">
-            <Building2 :size="16" style="color:var(--color-text-muted)" />
-            <p class="font-bold text-[var(--color-text)]">{{ u.nome }}</p>
-            <span class="text-xs" style="color:var(--color-text-dim)">{{ u.cidade }}</span>
+        <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-3">
+          <div class="flex items-center gap-2 min-w-0">
+            <Building2 :size="16" class="shrink-0" style="color:var(--color-text-muted)" />
+            <p class="font-bold text-[var(--color-text)] truncate">{{ u.nome }}</p>
+            <span v-if="u.cidade" class="text-xs shrink-0" style="color:var(--color-text-dim)">{{ u.cidade }}</span>
           </div>
-          <button type="button" class="text-xs font-semibold flex items-center gap-1" style="color:var(--color-blue)" @click="abrirNovo(u.id)">
+          <button type="button" class="text-xs font-semibold flex items-center gap-1 shrink-0" style="color:var(--color-blue)" @click="abrirNovo(u.id)">
             <Plus :size="13" /> Adicionar sala
           </button>
         </div>

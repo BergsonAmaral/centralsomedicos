@@ -119,32 +119,32 @@ const iniciais = computed(() =>
             <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#2daa8a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
           </div>
           <div>
-            <h1 style="color:#ffffff;font-size:4rem;font-weight:900;margin-bottom:1rem">Obrigado!</h1>
-            <p style="color:#6ee7b7;font-size:1.5rem">Avaliação registrada. Até breve!</p>
+            <h1 style="color:#ffffff;font-size:clamp(2.2rem,7vw,4rem);font-weight:900;margin-bottom:1rem">Obrigado!</h1>
+            <p style="color:#6ee7b7;font-size:clamp(1.1rem,3vw,1.5rem)">Avaliação registrada. Até breve!</p>
           </div>
         </template>
         <template v-else>
           <div>
-            <h1 style="color:#ffffff;font-size:3.5rem;font-weight:900;margin-bottom:0.75rem">Consulta encerrada</h1>
-            <p style="color:#e2e8f0;font-size:1.5rem">
+            <h1 style="color:#ffffff;font-size:clamp(2rem,6.5vw,3.5rem);font-weight:900;margin-bottom:0.75rem">Consulta encerrada</h1>
+            <p style="color:#e2e8f0;font-size:clamp(1.1rem,3vw,1.5rem)">
               Como foi o atendimento com <strong style="color:#ffffff">Dr(a). {{ nomeMedicoAtual }}</strong>?
             </p>
           </div>
-          <div style="display:flex;gap:1.25rem">
+          <div style="display:flex;gap:clamp(0.5rem,2.5vw,1.25rem)">
             <button
               v-for="i in 5" :key="i" type="button"
               style="background:none;border:none;cursor:pointer;transition:transform 0.15s"
               @click="avNota = i" @mouseenter="avHover = i" @mouseleave="avHover = 0"
             >
-              <Star :size="64"
+              <Star :size="64" style="width:clamp(2.2rem,9vw,4rem);height:clamp(2.2rem,9vw,4rem)"
                 :fill="(avHover || avNota) >= i ? '#f59e0b' : 'transparent'"
                 :stroke="(avHover || avNota) >= i ? '#f59e0b' : 'rgba(255,255,255,0.5)'"
                 stroke-width="1.5"
               />
             </button>
           </div>
-          <p v-if="!avNota" style="color:rgba(255,255,255,0.65);font-size:1.3rem">Toque em uma estrela para avaliar</p>
-          <p v-else style="color:#ffffff;font-size:1.5rem;font-weight:700">
+          <p v-if="!avNota" style="color:rgba(255,255,255,0.65);font-size:clamp(1rem,2.5vw,1.3rem)">Toque em uma estrela para avaliar</p>
+          <p v-else style="color:#ffffff;font-size:clamp(1.2rem,3vw,1.5rem);font-weight:700">
             {{ ['','Péssimo','Ruim','Regular','Bom','Excelente'][avNota] }}
           </p>
           <textarea
@@ -157,7 +157,7 @@ const iniciais = computed(() =>
           <p v-if="avErro" style="color:#f87171;font-size:1rem">{{ avErro }}</p>
           <button
             v-if="avNota" type="button" :disabled="avEnviando"
-            style="padding:1.25rem 4rem;border-radius:1.5rem;color:#ffffff;font-weight:900;font-size:1.8rem;border:none;cursor:pointer;background:linear-gradient(135deg,#2daa8a,#1e7a65);opacity:1;transition:transform 0.15s"
+            style="padding:clamp(0.9rem,2.5vw,1.25rem) clamp(2rem,7vw,4rem);border-radius:1.5rem;color:#ffffff;font-weight:900;font-size:clamp(1.3rem,3.5vw,1.8rem);border:none;cursor:pointer;background:linear-gradient(135deg,#2daa8a,#1e7a65);opacity:1;transition:transform 0.15s"
             @click="enviarAvaliacao"
           >{{ avEnviando ? 'Enviando...' : 'Enviar avaliação' }}</button>
         </template>
@@ -172,8 +172,8 @@ const iniciais = computed(() =>
           <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
         </div>
         <div>
-          <h1 style="color:#ffffff;font-size:4rem;font-weight:900;margin-bottom:1rem">Consulta encerrada!</h1>
-          <p style="color:#86efac;font-size:2rem">Obrigado. Até breve!</p>
+          <h1 style="color:#ffffff;font-size:clamp(2.2rem,7vw,4rem);font-weight:900;margin-bottom:1rem">Consulta encerrada!</h1>
+          <p style="color:#86efac;font-size:clamp(1.3rem,4vw,2rem)">Obrigado. Até breve!</p>
         </div>
       </div>
     </template>
