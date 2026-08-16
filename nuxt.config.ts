@@ -21,11 +21,6 @@ export default defineNuxtConfig({
       // pdfmake removido daqui — carregado dinamicamente só onde é usado
     },
     build: {
-      // Evita "flash sem estilo" no primeiro acesso: sem isso, o CSS de
-      // cada página (via <style scoped>) só chega quando o chunk daquela
-      // rota carrega — no refresh já está em cache, por isso "some" o bug.
-      // Com um único CSS carregado de uma vez, esse atraso deixa de existir.
-      cssCodeSplit: false,
       rollupOptions: {
         output: {
           manualChunks: {
