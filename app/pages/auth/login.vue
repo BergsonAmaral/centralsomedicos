@@ -6,7 +6,6 @@ definePageMeta({ layout: false })
 
 const supabase = useSupabaseClient()
 const authStore = useAuthStore()
-const router = useRouter()
 
 const email = ref('')
 const senha = ref('')
@@ -17,8 +16,12 @@ const user = useSupabaseUser()
 onMounted(async () => {
   if (user.value) {
     await authStore.loadProfile()
-    if (authStore.isAdmin) router.replace('/admin')
-    else if (authStore.isMedico) router.replace('/medico')
+    // Recarrega a página em vez de navegar via SPA: trocar do layout de
+    // login (sem layout) para admin/medico dentro da mesma sessão de router
+    // às vezes pintava a tela antes do CSS do novo layout carregar,
+    // deixando o grid quebrado até um refresh manual.
+    if (authStore.isAdmin) window.location.href = '/admin'
+    else if (authStore.isMedico) window.location.href = '/medico'
   }
 })
 
@@ -46,9 +49,9 @@ async function entrar() {
     if (authStore.isAdmin) {
       const adminLog = useAdminLog()
       await adminLog.registrar('login')
-      await router.replace('/admin')
+      window.location.href = '/admin'
     } else if (authStore.isMedico) {
-      await router.replace('/medico')
+      window.location.href = '/medico'
     } else {
       erro.value = 'Acesso não autorizado.'
     }

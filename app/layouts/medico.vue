@@ -27,7 +27,10 @@ function isActive(to: string) {
 
 async function logout() {
   await authStore.logout()
-  navigateTo('/auth/login')
+  // Navegação forçada (recarrega a página) em vez de navigateTo: trocar de
+  // layout inteiro (medico → login) via SPA às vezes pintava a tela antes do
+  // CSS do novo layout terminar de carregar, deixando o layout quebrado.
+  window.location.href = '/auth/login'
 }
 </script>
 
