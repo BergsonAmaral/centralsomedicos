@@ -31,6 +31,15 @@ function getHoje() {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 }
 
+// Escolhe, entre os agendamentos ativos da sala, qual mostrar. Uma
+// avaliação nunca respondida (paciente foi embora sem votar) fica presa em
+// "aguardando_avaliacao" e não deve bloquear o próximo paciente chamado
+// para a mesma sala — por isso um atendimento em andamento sempre tem
+// prioridade sobre uma avaliação pendente.
+function escolherAtivo(lista: Agendamento[]): Agendamento | null {
+  return lista.find((a) => a.status !== 'aguardando_avaliacao') ?? lista[0] ?? null
+}
+
 async function buscarPacienteAtivo() {
   const { data } = await supabase
     .from('agendamentos')
@@ -38,9 +47,8 @@ async function buscarPacienteAtivo() {
     .eq('sala_slug', slug)
     .in('status', ['aguardando_medico', 'aguardando_paciente', 'em_consulta', 'aguardando_avaliacao'])
     .eq('data_consulta', getHoje())
-    .maybeSingle()
 
-  pacienteAtual.value = data ?? null
+  pacienteAtual.value = escolherAtivo(data ?? [])
 }
 
 // Buscar a sala (e a unidade dona dela) pelo slug
@@ -62,15 +70,14 @@ if (!salaData.value) {
 } else {
   sala.value = salaData.value as Sala
 
-  const { data: ativo } = await supabase
+  const { data: ativos } = await supabase
     .from('agendamentos')
     .select('*, pacientes(nome), medicos(id, nome, especialidade)')
     .eq('sala_slug', slug)
     .in('status', ['aguardando_medico', 'aguardando_paciente', 'em_consulta', 'aguardando_avaliacao'])
     .eq('data_consulta', getHoje())
-    .maybeSingle()
 
-  if (ativo) pacienteAtual.value = ativo
+  pacienteAtual.value = escolherAtivo(ativos ?? [])
 }
 
 // Se o paciente fechar a aba/navegador durante a consulta, avisa o servidor
