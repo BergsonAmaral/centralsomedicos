@@ -74,6 +74,15 @@ async function salvar() {
       cidade: form.value.cidade.trim() || null,
       ativo: form.value.ativo,
     }
+
+    // O banco não impede nomes repetidos, e duas unidades com o mesmo nome
+    // ficam impossíveis de distinguir no check-in e nos filtros da fila.
+    const duplicada = unidades.value.find(
+      (u) => u.nome.trim().toLowerCase() === payload.nome.toLowerCase()
+        && u.id !== editando.value?.id
+    )
+    if (duplicada) throw new Error(`Já existe uma unidade chamada "${duplicada.nome}".`)
+
     const { error } = editando.value
       ? await supabase.from('unidades').update(payload).eq('id', editando.value.id)
       : await supabase.from('unidades').insert(payload)
@@ -92,7 +101,19 @@ async function salvar() {
 
 const excluindo = ref<string | null>(null)
 async function excluir(u: Unidade) {
-  if (!confirm(`Remover a unidade "${u.nome}"? Pacientes vinculados ficam sem unidade.`)) return
+  // Excluir a unidade apaga junto todas as salas dela (ON DELETE CASCADE).
+  // O aviso antigo só falava dos pacientes, então as salas — e os links de
+  // acesso já distribuídos — sumiam sem que ninguém fosse avisado.
+  const { count } = await supabase
+    .from('salas')
+    .select('id', { count: 'exact', head: true })
+    .eq('unidade_id', u.id)
+
+  const aviso = count
+    ? `Remover a unidade "${u.nome}"?\n\nATENÇÃO: ${count} sala(s) desta unidade também serão excluídas, e os links /sala/... delas deixarão de funcionar.\n\nPacientes vinculados ficam sem unidade.`
+    : `Remover a unidade "${u.nome}"? Pacientes vinculados ficam sem unidade.`
+
+  if (!confirm(aviso)) return
   excluindo.value = u.id
   const { error } = await supabase.from('unidades').delete().eq('id', u.id)
   await carregar()

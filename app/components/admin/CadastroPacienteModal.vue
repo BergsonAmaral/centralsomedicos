@@ -65,6 +65,7 @@ function validar(): string | null {
   if (!nome.value.trim()) return 'Informe o nome do paciente.'
   const cpfNum = cpf.value.replace(/\D/g, '')
   if (cpfNum.length !== 11) return 'CPF deve ter 11 dígitos.'
+  if (!cpfValido(cpfNum)) return 'CPF inválido — confira os números digitados.'
   if (!dataNascimento.value) return 'Informe a data de nascimento.'
   if (criarAgendamento.value) {
     if (!medicoId.value) return 'Selecione o médico para o agendamento.'

@@ -150,7 +150,23 @@ async function salvar() {
 
 const excluindo = ref<string | null>(null)
 async function excluir(s: Sala) {
-  if (!confirm(`Remover a sala "${s.nome}"?`)) return
+  // agendamentos.sala_slug é texto solto, sem FK — excluir a sala não é
+  // bloqueado pelo banco e deixaria um atendimento em andamento sem tela.
+  const hoje = new Date()
+  const dataHoje = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}-${String(hoje.getDate()).padStart(2,'0')}`
+  const { count } = await supabase
+    .from('agendamentos')
+    .select('id', { count: 'exact', head: true })
+    .eq('sala_slug', s.slug)
+    .eq('data_consulta', dataHoje)
+    .in('status', ['checkin', 'aguardando_medico', 'aguardando_paciente', 'em_consulta'])
+
+  if (count) {
+    toast.erro(`Não é possível remover: há ${count} paciente(s) usando esta sala agora. Encerre ou mova o atendimento antes.`)
+    return
+  }
+
+  if (!confirm(`Remover a sala "${s.nome}"? O link /sala/${s.slug} deixará de funcionar.`)) return
   excluindo.value = s.id
   const { error } = await supabase.from('salas').delete().eq('id', s.id)
   await carregar()
