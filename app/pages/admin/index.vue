@@ -7,7 +7,18 @@ import {
 definePageMeta({ layout: 'admin', middleware: ['auth', 'role'] })
 
 const supabase = useSupabaseClient()
-const hoje = new Date().toISOString().split('T')[0]
+
+// Data de hoje em horário LOCAL, não UTC. Com toISOString() o Brasil
+// (UTC-3) já vira o dia seguinte a partir das 21h, e o dashboard passava
+// a consultar amanhã — zerando todos os indicadores à noite.
+// Recalculada a cada carga para não ficar presa se a página virar o dia.
+function dataHoje(): string {
+  const d = new Date()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${mm}-${dd}`
+}
+
 const carregando = ref(true)
 let channel: ReturnType<typeof supabase.channel> | null = null
 
@@ -34,7 +45,7 @@ async function carregar() {
   carregando.value = true
 
   const [agResult, medicosResult, docsResult] = await Promise.all([
-    supabase.from('agendamentos').select('status, medico_id').eq('data_consulta', hoje),
+    supabase.from('agendamentos').select('status, medico_id').eq('data_consulta', dataHoje()),
     supabase.from('medicos').select('id, nome, especialidade, foto_url, pausado, ativo').eq('ativo', true),
     supabase.from('documentos').select('id').eq('status', 'gerado'),
   ])

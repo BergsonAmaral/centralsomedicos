@@ -77,19 +77,32 @@ watch(buscaPaciente, () => {
   debounce = setTimeout(() => { pagina.value = 1; carregar() }, 300)
 })
 
-function definirPeriodo(periodo: 'hoje' | '7dias' | '30dias') {
-  const hoje = new Date()
-  filtroDataFim.value = hoje.toISOString().slice(0, 10)
-  if (periodo === 'hoje') {
-    filtroDataInicio.value = hoje.toISOString().slice(0, 10)
-  } else if (periodo === '7dias') {
-    const d = new Date(hoje); d.setDate(d.getDate() - 6)
-    filtroDataInicio.value = d.toISOString().slice(0, 10)
-  } else if (periodo === '30dias') {
-    const d = new Date(hoje); d.setDate(d.getDate() - 29)
-    filtroDataInicio.value = d.toISOString().slice(0, 10)
-  }
+// Data em horário LOCAL — toISOString() usa UTC e no Brasil (UTC-3) já
+// vira o dia seguinte a partir das 21h, fazendo o filtro pular um dia.
+function dataLocal(offsetDias = 0): string {
+  const d = new Date()
+  d.setDate(d.getDate() + offsetDias)
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${mm}-${dd}`
 }
+
+function definirPeriodo(periodo: 'hoje' | '7dias' | '30dias') {
+  filtroDataFim.value = dataLocal(0)
+  if (periodo === 'hoje') filtroDataInicio.value = dataLocal(0)
+  else if (periodo === '7dias') filtroDataInicio.value = dataLocal(-6)
+  else if (periodo === '30dias') filtroDataInicio.value = dataLocal(-29)
+}
+
+// Qual preset corresponde às datas atuais — sem isso os botões nunca
+// ficavam marcados, mesmo funcionando.
+const periodoAtivo = computed(() => {
+  if (filtroDataFim.value !== dataLocal(0)) return ''
+  if (filtroDataInicio.value === dataLocal(0)) return 'hoje'
+  if (filtroDataInicio.value === dataLocal(-6)) return '7dias'
+  if (filtroDataInicio.value === dataLocal(-29)) return '30dias'
+  return ''
+})
 
 // Nova consulta
 const novoModal = ref(false)
@@ -264,7 +277,9 @@ const paginasVisiveis = computed(() => {
           v-for="p in [{ v: 'hoje', l: 'Hoje' }, { v: '7dias', l: 'Últimos 7 dias' }, { v: '30dias', l: 'Últimos 30 dias' }]"
           :key="p.v"
           class="px-3 py-1 rounded-full text-xs font-semibold border transition-all"
-          style="background:white;color:var(--color-text-muted);border-color:var(--color-border)"
+          :style="periodoAtivo === p.v
+            ? 'background:#2563eb;color:white;border-color:#2563eb'
+            : 'background:white;color:var(--color-text-muted);border-color:var(--color-border)'"
           @click="definirPeriodo(p.v as any)"
         >{{ p.l }}</button>
         <div class="flex items-center gap-1.5 ml-auto">
