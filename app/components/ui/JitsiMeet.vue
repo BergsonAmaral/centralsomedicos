@@ -35,6 +35,9 @@ async function initJitsi() {
     height: '100%',
     userInfo: {
       displayName: props.displayName ?? 'Usuário',
+      // Mostrado como avatar sempre que a câmera está desligada (e antes de
+      // ligar), em vez do círculo genérico com as iniciais.
+      avatarURL: `${window.location.origin}/logo.png`,
     },
     configOverwrite: {
       prejoinPageEnabled: false,
@@ -68,5 +71,9 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="container" style="width:100%;height:100%;background:#000" />
+  <!-- Fundo com a logo enquanto o Jitsi ainda está carregando/conectando -->
+  <div
+    ref="container"
+    style="width:100%;height:100%;background:#000 url('/logo.png') center/120px no-repeat"
+  />
 </template>
