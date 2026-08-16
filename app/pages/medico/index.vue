@@ -37,6 +37,14 @@ const aguardandoPaciente = computed(() =>
   filaStore.filaAtiva.find((a) => a.status === 'aguardando_paciente') ?? null
 )
 
+// No Jitsi público (sem autenticação), quem entra primeiro na sala vira o
+// anfitrião. Antes o médico só entrava quando o status virava "em_consulta"
+// — mas o paciente entra na sala assim que clica "Entrar", antes desse
+// status ser confirmado, então o paciente quase sempre chegava primeiro e
+// ficava com os controles de anfitrião. Agora o médico entra assim que
+// aceita (aguardando_paciente), garantindo que chegue primeiro.
+const consultaAtiva = computed(() => emConsulta.value ?? aguardandoPaciente.value)
+
 const proximosFila = computed(() =>
   filaStore.filaAtiva.filter((a) => a.status === 'checkin')
 )
@@ -294,7 +302,7 @@ onUnmounted(() => {
     <!-- ============================================ -->
     <Teleport to="#medico-main">
       <div
-        v-if="emConsulta"
+        v-if="consultaAtiva"
         class="absolute inset-0 z-[100] flex flex-col lg:flex-row"
         style="background:#0f172a"
       >
@@ -302,18 +310,22 @@ onUnmounted(() => {
         <div class="flex flex-col min-h-0" style="flex:1 1 0%;min-height:40vh">
           <!-- Top bar compacto -->
           <div class="flex items-center gap-3 px-4 py-2 shrink-0" style="background:#0a1f14">
-            <UiAvatar :name="(emConsulta.pacientes as any)?.nome" size="xs" />
+            <UiAvatar :name="(consultaAtiva.pacientes as any)?.nome" size="xs" />
             <div class="min-w-0 flex-1">
-              <p class="text-[10px] font-bold uppercase tracking-wider" style="color:#4ade80">Em consulta</p>
-              <p class="text-white text-sm font-semibold truncate">{{ (emConsulta.pacientes as any)?.nome }}</p>
+              <p class="text-[10px] font-bold uppercase tracking-wider" style="color:#4ade80">
+                {{ emConsulta ? 'Em consulta' : 'Aguardando paciente entrar' }}
+              </p>
+              <p class="text-white text-sm font-semibold truncate">{{ (consultaAtiva.pacientes as any)?.nome }}</p>
             </div>
             <span class="font-mono font-bold text-sm hidden lg:block" style="color:#4ade80">{{ formatarTimer(timerSeg) }}</span>
           </div>
-          <!-- Jitsi Meet integrado (oculto quando modal está aberto para evitar que iframe sobreponha overlay) -->
+          <!-- Jitsi Meet integrado (oculto quando modal está aberto para evitar que iframe sobreponha overlay).
+               Monta já em "aguardando_paciente" (antes do paciente entrar) para o médico ser o primeiro
+               a entrar na sala do Jitsi e virar anfitrião automaticamente. -->
           <div class="flex-1 min-h-0">
             <UiJitsiMeet
               v-if="!encerrandoModal"
-              :room-id="emConsulta.id"
+              :room-id="consultaAtiva.id"
               :display-name="authStore.medicoData?.nome ?? 'Médico'"
             />
           </div>
@@ -328,11 +340,12 @@ onUnmounted(() => {
           <div class="shrink-0 px-4 py-3 flex items-center justify-between" style="background:#0f172a;border-bottom:1px solid #334155">
             <div class="min-w-0">
               <p class="text-[11px] font-bold uppercase tracking-wider" style="color:#94a3b8">Prontuário</p>
-              <p class="text-white text-sm font-semibold truncate">{{ (emConsulta.pacientes as any)?.nome }}</p>
+              <p class="text-white text-sm font-semibold truncate">{{ (consultaAtiva.pacientes as any)?.nome }}</p>
             </div>
             <div class="flex items-center gap-2 shrink-0">
-              <span class="font-mono font-bold" style="color:#4ade80">{{ formatarTimer(timerSeg) }}</span>
+              <span v-if="emConsulta" class="font-mono font-bold" style="color:#4ade80">{{ formatarTimer(timerSeg) }}</span>
               <button
+                v-if="emConsulta"
                 type="button"
                 class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-bold"
                 style="background:#dc2626;color:white"
@@ -387,10 +400,10 @@ onUnmounted(() => {
 
           <!-- Conteúdo rolável -->
           <div class="flex-1 overflow-y-auto p-4" style="background:white">
-            <MedicoPacienteAtual v-if="sidebarTab === 'paciente'" :agendamento="emConsulta" />
+            <MedicoPacienteAtual v-if="sidebarTab === 'paciente'" :agendamento="consultaAtiva" />
             <MedicoDocumentoForm
               v-if="sidebarTab === 'documentos' && authStore.medicoData && authStore.medicoId"
-              :agendamento="emConsulta"
+              :agendamento="consultaAtiva"
               :medico-id="authStore.medicoId"
               :medico-nome="authStore.medicoData.nome"
               :medico-c-r-m="authStore.medicoData.crm"
@@ -448,7 +461,7 @@ onUnmounted(() => {
 
     <!-- Modal encerrar (fora da consulta — fallback) -->
     <UiModal
-      v-if="encerrandoModal && !emConsulta"
+      v-if="encerrandoModal && !consultaAtiva"
       :model-value="true"
       title="Encerrar consulta"
       size="md"
