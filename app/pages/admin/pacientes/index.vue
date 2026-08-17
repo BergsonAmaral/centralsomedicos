@@ -5,6 +5,7 @@ import type { Paciente } from '~/types'
 definePageMeta({ layout: 'admin', middleware: ['auth', 'role'] })
 
 const supabase = useSupabaseClient()
+const adminLog = useAdminLog()
 
 const busca = ref('')
 const filtroSexo = ref<'' | 'M' | 'F' | 'O'>('')
@@ -150,6 +151,18 @@ async function confirmarAgendamento() {
   })
   salvandoAg.value = false
   if (error) { erroAg.value = error.message; return }
+  try {
+    const med = medicos.value.find((m) => m.id === agForm.value.medico_id)
+    await adminLog.registrar('agendamento_criado', {
+      entidade: 'agendamento',
+      detalhes: {
+        paciente: agendandoPaciente.value.nome,
+        medico: med?.nome,
+        data: agForm.value.data_consulta,
+        origem: 'manual',
+      },
+    })
+  } catch {}
   agendandoPaciente.value = null
 }
 

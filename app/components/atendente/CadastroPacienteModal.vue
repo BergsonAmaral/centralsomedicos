@@ -6,6 +6,7 @@ const emit = defineEmits<{ close: []; criado: [paciente: { id: string; nome: str
 
 const supabase = useSupabaseClient()
 const authStore = useAuthStore()
+const adminLog = useAdminLog()
 
 const erro = ref('')
 const salvando = ref(false)
@@ -92,6 +93,14 @@ async function salvar() {
         return
       }
       pacienteId = novo.id
+
+      try {
+        await adminLog.registrar('paciente_criado', {
+          entidade: 'paciente',
+          entidadeId: pacienteId,
+          detalhes: { nome: pacienteNome, cpf: cpfNum, origem: 'atendente' },
+        })
+      } catch {}
     }
 
     sucesso.value = true

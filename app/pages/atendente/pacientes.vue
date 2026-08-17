@@ -7,6 +7,7 @@ definePageMeta({ layout: 'atendente', middleware: ['auth', 'role'] })
 
 const supabase = useSupabaseClient()
 const authStore = useAuthStore()
+const adminLog = useAdminLog()
 
 const busca = ref('')
 const POR_PAGINA = 20
@@ -116,6 +117,18 @@ async function confirmarAgendamento() {
   })
   salvandoAg.value = false
   if (error) { erroAg.value = error.message; return }
+  try {
+    const med = medicos.value.find((m) => m.id === agForm.value.medico_id)
+    await adminLog.registrar('agendamento_criado', {
+      entidade: 'agendamento',
+      detalhes: {
+        paciente: agendandoPaciente.value.nome,
+        medico: med?.nome,
+        data: agForm.value.data_consulta,
+        origem: 'atendente',
+      },
+    })
+  } catch {}
   agendandoPaciente.value = null
 }
 </script>
