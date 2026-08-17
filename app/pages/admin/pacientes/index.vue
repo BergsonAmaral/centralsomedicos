@@ -104,8 +104,9 @@ const modalCadastro = ref(false)
 
 // Agendamento rápido
 const medicos = ref<{ id: string; nome: string; especialidade: string }[]>([])
+const salasDaUnidade = ref<{ slug: string; nome: string }[]>([])
 const agendandoPaciente = ref<Paciente | null>(null)
-const agForm = ref({ medico_id: '', data_consulta: '', motivo: '', observacoes: '' })
+const agForm = ref({ medico_id: '', data_consulta: '', motivo: '', observacoes: '', sala_slug: '' })
 const salvandoAg = ref(false)
 const erroAg = ref('')
 
@@ -114,12 +115,20 @@ async function abrirAgendar(p: Paciente) {
     const { data } = await supabase.from('medicos').select('id, nome, especialidade').eq('ativo', true).order('especialidade,nome')
     medicos.value = data ?? []
   }
+  // Só mostra as salas da unidade do próprio paciente — a sala pertence à
+  // unidade, então não faz sentido oferecer sala de outro lugar.
+  salasDaUnidade.value = []
+  if (p.unidade_id) {
+    const { data } = await supabase.from('salas').select('slug, nome').eq('unidade_id', p.unidade_id).eq('ativo', true).order('nome')
+    salasDaUnidade.value = data ?? []
+  }
   const hoje = new Date()
   agForm.value = {
     medico_id: medicos.value[0]?.id ?? '',
     data_consulta: `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}-${String(hoje.getDate()).padStart(2,'0')}`,
     motivo: '',
     observacoes: '',
+    sala_slug: '',
   }
   erroAg.value = ''
   agendandoPaciente.value = p
@@ -135,6 +144,7 @@ async function confirmarAgendamento() {
     data_consulta: agForm.value.data_consulta,
     motivo: agForm.value.motivo || null,
     observacoes: agForm.value.observacoes || null,
+    sala_slug: agForm.value.sala_slug || null,
     origem: 'manual',
     status: 'agendado',
   })
@@ -425,6 +435,19 @@ const paginasVisiveis = computed(() => {
         <div>
           <label class="text-sm font-medium text-[var(--color-text-muted)] block mb-1">Observação</label>
           <input v-model="agForm.observacoes" type="text" class="input-base" placeholder="Opcional" />
+        </div>
+        <div>
+          <label class="text-sm font-medium text-[var(--color-text-muted)] block mb-1">Sala</label>
+          <select v-model="agForm.sala_slug" class="input-base" :disabled="!salasDaUnidade.length">
+            <option value="">Selecione…</option>
+            <option v-for="s in salasDaUnidade" :key="s.slug" :value="s.slug">{{ s.nome }}</option>
+          </select>
+          <p v-if="!agendandoPaciente?.unidade_id" class="text-xs mt-1" style="color:#dc2626">
+            Paciente sem unidade cadastrada — defina uma unidade antes pra escolher a sala.
+          </p>
+          <p v-else-if="!salasDaUnidade.length" class="text-xs mt-1" style="color:#dc2626">
+            Essa unidade não tem salas cadastradas.
+          </p>
         </div>
         <p v-if="erroAg" class="text-xs text-red-600">{{ erroAg }}</p>
       </div>

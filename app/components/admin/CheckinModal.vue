@@ -67,6 +67,7 @@ const triagem = ref({
 
 interface MedicoOpcao { id: string; nome: string; especialidade: string; pausado: boolean }
 interface SalaOpcao { id: string; slug: string; nome: string }
+interface UnidadeOpcao { id: string; nome: string }
 
 const medicos = ref<MedicoOpcao[]>([])
 const ocupadoIds = ref<Set<string>>(new Set())
@@ -75,26 +76,47 @@ const medicoSelecionadoId = ref<string | null>(props.agendamento.medico_id ?? nu
 const salas = ref<SalaOpcao[]>([])
 const salaSelecionadaSlug = ref<string | null>(props.agendamento.sala_slug ?? null)
 
+// Muitos pacientes antigos não têm unidade definida — sem ela não dá pra
+// saber quais salas mostrar, e a lista de salas simplesmente ficava vazia
+// sem nenhuma explicação. Deixa escolher a unidade aqui mesmo quando falta.
+const unidadePacienteId = (props.agendamento.pacientes as any)?.unidade_id ?? null
+const unidades = ref<UnidadeOpcao[]>([])
+const unidadeSelecionadaId = ref<string | null>(unidadePacienteId)
+const carregandoSalas = ref(false)
+
+async function carregarSalasDaUnidade(unidadeId: string | null) {
+  carregandoSalas.value = true
+  if (!unidadeId) {
+    salas.value = []
+    carregandoSalas.value = false
+    return
+  }
+  const { data } = await supabase.from('salas').select('id, slug, nome').eq('unidade_id', unidadeId).eq('ativo', true).order('nome')
+  salas.value = data ?? []
+  // Só pré-seleciona a única sala se ainda não houver uma definida
+  if (!salaSelecionadaSlug.value && salas.value.length === 1) {
+    salaSelecionadaSlug.value = salas.value[0]?.slug ?? null
+  }
+  carregandoSalas.value = false
+}
+watch(unidadeSelecionadaId, (id) => carregarSalasDaUnidade(id))
+
 onMounted(async () => {
   const hoje = new Date()
   const dataHoje = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`
 
-  const unidadeId = (props.agendamento.pacientes as any)?.unidade_id ?? null
-
-  const [{ data: mData }, { data: ocupData }, { data: sData }] = await Promise.all([
+  const [{ data: mData }, { data: ocupData }] = await Promise.all([
     supabase.from('medicos').select('id, nome, especialidade, pausado').eq('ativo', true).order('nome'),
     supabase.from('agendamentos').select('medico_id').eq('data_consulta', dataHoje)
       .in('status', ['aguardando_medico', 'aguardando_paciente', 'em_consulta']),
-    unidadeId
-      ? supabase.from('salas').select('id, slug, nome').eq('unidade_id', unidadeId).eq('ativo', true).order('nome')
-      : Promise.resolve({ data: [] as SalaOpcao[] }),
+    carregarSalasDaUnidade(unidadeSelecionadaId.value),
   ])
   medicos.value = mData ?? []
   ocupadoIds.value = new Set((ocupData ?? []).map((a) => a.medico_id))
-  salas.value = sData ?? []
-  // Só pré-seleciona a única sala se ainda não houver uma definida
-  if (!salaSelecionadaSlug.value && salas.value.length === 1) {
-    salaSelecionadaSlug.value = salas.value[0]?.slug ?? null
+
+  if (!unidadePacienteId) {
+    const { data } = await supabase.from('unidades').select('id, nome').eq('ativo', true).order('nome')
+    unidades.value = data ?? []
   }
 })
 
@@ -121,6 +143,16 @@ const cpfFormatado = computed(() => {
 async function confirmar() {
   carregando.value = true
   try {
+    // Paciente sem unidade cadastrada e uma foi escolhida agora — grava no
+    // cadastro dele pra não precisar escolher de novo da próxima vez
+    if (!unidadePacienteId && unidadeSelecionadaId.value && paciente.value?.id) {
+      const { error: errUnidade } = await supabase
+        .from('pacientes')
+        .update({ unidade_id: unidadeSelecionadaId.value })
+        .eq('id', paciente.value.id)
+      if (errUnidade) throw new Error(errUnidade.message)
+    }
+
     // Faz/atualiza o check-in com triagem, já registrando em qual sala da
     // unidade o paciente está fisicamente
     const { error: errCheckin } = await fila.fazerCheckin(props.agendamento.id, triagem.value, salaSelecionadaSlug.value)
@@ -169,14 +201,30 @@ async function confirmar() {
         </p>
       </div>
 
+      <!-- Unidade: só aparece se o paciente não tiver uma cadastrada — sem
+           isso não dava pra saber quais salas oferecer -->
+      <div v-if="!unidadePacienteId">
+        <label class="text-xs font-semibold text-[var(--color-text-muted)] block mb-1">Unidade do paciente</label>
+        <select v-model="unidadeSelecionadaId" class="input-base py-2.5 text-sm">
+          <option :value="null">Selecione…</option>
+          <option v-for="u in unidades" :key="u.id" :value="u.id">{{ u.nome }}</option>
+        </select>
+        <p class="mt-1.5 text-xs" style="color:#854d0e">
+          Este paciente ainda não tem unidade cadastrada — escolha uma pra liberar as salas.
+        </p>
+      </div>
+
       <!-- Sala: onde o paciente está fisicamente, na unidade dele -->
       <div>
         <label class="text-xs font-semibold text-[var(--color-text-muted)] block mb-1">Sala (na unidade do paciente)</label>
-        <select v-model="salaSelecionadaSlug" class="input-base py-2.5 text-sm">
+        <select v-model="salaSelecionadaSlug" class="input-base py-2.5 text-sm" :disabled="carregandoSalas || !unidadeSelecionadaId">
           <option :value="null">Selecione…</option>
           <option v-for="s in salas" :key="s.id" :value="s.slug">{{ s.nome }}</option>
         </select>
-        <p v-if="salas.length === 0" class="mt-1.5 text-xs font-medium" style="color:#dc2626">
+        <p v-if="!unidadeSelecionadaId" class="mt-1.5 text-xs font-medium" style="color:#dc2626">
+          Escolha a unidade do paciente primeiro.
+        </p>
+        <p v-else-if="!carregandoSalas && salas.length === 0" class="mt-1.5 text-xs font-medium" style="color:#dc2626">
           Esta unidade não tem salas cadastradas. Cadastre em <strong>Admin → Salas</strong>.
         </p>
       </div>

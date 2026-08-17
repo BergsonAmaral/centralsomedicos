@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { Search, Phone, MessageCircle, ChevronLeft, ChevronRight, Users2, UserPlus, CalendarPlus } from 'lucide-vue-next'
 import type { Paciente } from '~/types'
+import { useAuthStore } from '~/stores/auth'
 
 definePageMeta({ layout: 'atendente', middleware: ['auth', 'role'] })
 
 const supabase = useSupabaseClient()
+const authStore = useAuthStore()
 
 const busca = ref('')
 const POR_PAGINA = 20
@@ -71,8 +73,9 @@ const modalCadastro = ref(false)
 
 // Agendamento rápido
 const medicos = ref<{ id: string; nome: string; especialidade: string }[]>([])
+const salasDaUnidade = ref<{ slug: string; nome: string }[]>([])
 const agendandoPaciente = ref<Paciente | null>(null)
-const agForm = ref({ medico_id: '', data_consulta: '', motivo: '', observacoes: '' })
+const agForm = ref({ medico_id: '', data_consulta: '', motivo: '', observacoes: '', sala_slug: '' })
 const salvandoAg = ref(false)
 const erroAg = ref('')
 
@@ -81,12 +84,17 @@ async function abrirAgendar(p: Paciente) {
     const { data } = await supabase.from('medicos').select('id, nome, especialidade').eq('ativo', true).order('especialidade,nome')
     medicos.value = data ?? []
   }
+  if (!salasDaUnidade.value.length && authStore.atendenteUnidadeId) {
+    const { data } = await supabase.from('salas').select('slug, nome').eq('unidade_id', authStore.atendenteUnidadeId).eq('ativo', true).order('nome')
+    salasDaUnidade.value = data ?? []
+  }
   const hoje = new Date()
   agForm.value = {
     medico_id: medicos.value[0]?.id ?? '',
     data_consulta: `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`,
     motivo: '',
     observacoes: '',
+    sala_slug: '',
   }
   erroAg.value = ''
   agendandoPaciente.value = p
@@ -102,6 +110,7 @@ async function confirmarAgendamento() {
     data_consulta: agForm.value.data_consulta,
     motivo: agForm.value.motivo || null,
     observacoes: agForm.value.observacoes || null,
+    sala_slug: agForm.value.sala_slug || null,
     origem: 'manual',
     status: 'agendado',
   })
@@ -241,6 +250,16 @@ async function confirmarAgendamento() {
         <div>
           <label class="text-sm font-medium text-[var(--color-text-muted)] block mb-1">Observação</label>
           <input v-model="agForm.observacoes" type="text" class="input-base" placeholder="Opcional" />
+        </div>
+        <div>
+          <label class="text-sm font-medium text-[var(--color-text-muted)] block mb-1">Sala</label>
+          <select v-model="agForm.sala_slug" class="input-base" :disabled="!salasDaUnidade.length">
+            <option value="">Selecione…</option>
+            <option v-for="s in salasDaUnidade" :key="s.slug" :value="s.slug">{{ s.nome }}</option>
+          </select>
+          <p v-if="!salasDaUnidade.length" class="text-xs mt-1" style="color:#dc2626">
+            Sua unidade não tem salas cadastradas.
+          </p>
         </div>
         <p v-if="erroAg" class="text-xs text-red-600">{{ erroAg }}</p>
       </div>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Plus, UserCog, Power, Building2 } from 'lucide-vue-next'
+import { Plus, UserCog, Power, Building2, Trash2 } from 'lucide-vue-next'
 import type { Atendente, Unidade } from '~/types'
 
 definePageMeta({ layout: 'admin', middleware: ['auth', 'role'] })
@@ -29,6 +29,21 @@ async function alternarStatus(a: Atendente) {
   if (error) { toast.erro('Erro ao atualizar: ' + error.message); return }
   toast.sucesso(novoAtivo ? 'Atendente reativado.' : 'Atendente desativado.')
   await carregar()
+}
+
+const excluindo = ref<string | null>(null)
+async function excluir(a: Atendente) {
+  if (!confirm(`Excluir definitivamente o atendente "${a.nome}"? A conta de acesso dele também será removida. Essa ação não pode ser desfeita.`)) return
+  excluindo.value = a.id
+  try {
+    await $fetch('/api/admin/delete-atendente', { method: 'POST', body: { atendenteId: a.id } })
+    toast.sucesso('Atendente excluído.')
+    await carregar()
+  } catch (e: any) {
+    toast.erro('Erro ao excluir: ' + (e?.data?.message ?? 'tente novamente'))
+  } finally {
+    excluindo.value = null
+  }
 }
 
 // Modal de cadastro
@@ -119,9 +134,12 @@ async function salvar() {
           </span>
         </div>
         <div class="flex gap-2 pt-2 mt-auto" style="border-top:1px solid var(--color-border-light)">
-          <UiButton variant="ghost" size="sm" class="w-full" @click="alternarStatus(a)">
+          <UiButton variant="ghost" size="sm" class="flex-1" @click="alternarStatus(a)">
             <Power :size="13" style="color:#dc2626" />
             {{ a.ativo ? 'Desativar' : 'Reativar' }}
+          </UiButton>
+          <UiButton variant="ghost" size="sm" :loading="excluindo === a.id" @click="excluir(a)">
+            <Trash2 :size="13" style="color:#dc2626" />
           </UiButton>
         </div>
       </div>
