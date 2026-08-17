@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Plus, UserCog, Power, Building2, Trash2 } from 'lucide-vue-next'
+import { Plus, UserCog, Power, Building2, Trash2, Pencil } from 'lucide-vue-next'
 import type { Atendente, Unidade } from '~/types'
 
 definePageMeta({ layout: 'admin', middleware: ['auth', 'role'] })
@@ -46,44 +46,87 @@ async function excluir(a: Atendente) {
   }
 }
 
-// Modal de cadastro
+// Modal de cadastro / edição
 const modalAberto = ref(false)
+const editandoId = ref<string | null>(null)
+const emailOriginal = ref('')
 const form = ref({ nome: '', email: '', senha: '', unidadeId: '' })
 const salvando = ref(false)
+const carregandoEdicao = ref(false)
 const erro = ref('')
 
 function abrirNovo() {
+  editandoId.value = null
+  emailOriginal.value = ''
   form.value = { nome: '', email: '', senha: '', unidadeId: unidades.value[0]?.id ?? '' }
   erro.value = ''
   modalAberto.value = true
 }
 
+async function abrirEdicao(a: Atendente) {
+  editandoId.value = a.id
+  erro.value = ''
+  form.value = { nome: a.nome, email: '', senha: '', unidadeId: a.unidade_id }
+  modalAberto.value = true
+  carregandoEdicao.value = true
+  try {
+    const data = await $fetch<any>(`/api/admin/atendente/${a.id}`)
+    form.value.email = data.email ?? ''
+    emailOriginal.value = data.email ?? ''
+  } catch (e: any) {
+    erro.value = e?.data?.message ?? 'Erro ao carregar atendente'
+  } finally {
+    carregandoEdicao.value = false
+  }
+}
+
 async function salvar() {
   erro.value = ''
-  if (!form.value.nome.trim() || !form.value.email.trim() || !form.value.senha || !form.value.unidadeId) {
+  if (!form.value.nome.trim() || !form.value.email.trim() || (!editandoId.value && !form.value.senha) || !form.value.unidadeId) {
     erro.value = 'Preencha todos os campos.'
     return
   }
-  if (form.value.senha.length < 8) {
+  if (form.value.senha && form.value.senha.length < 8) {
     erro.value = 'Senha deve ter pelo menos 8 caracteres.'
     return
   }
   salvando.value = true
   try {
-    await $fetch('/api/admin/create-atendente', {
-      method: 'POST',
-      body: {
+    if (editandoId.value) {
+      const { error } = await supabase.from('atendentes').update({
         nome: form.value.nome.trim(),
-        email: form.value.email.trim(),
-        senha: form.value.senha,
-        unidadeId: form.value.unidadeId,
-      },
-    })
+        unidade_id: form.value.unidadeId,
+      }).eq('id', editandoId.value)
+      if (error) throw new Error(error.message)
+
+      const credPayload: { email?: string; senha?: string } = {}
+      if (form.value.email.trim() && form.value.email.trim() !== emailOriginal.value) credPayload.email = form.value.email.trim()
+      if (form.value.senha) credPayload.senha = form.value.senha
+      if (credPayload.email || credPayload.senha) {
+        await $fetch(`/api/admin/atendente/${editandoId.value}/credentials`, {
+          method: 'PATCH',
+          body: credPayload,
+        }).catch((e) => {
+          throw new Error(e?.data?.message ?? 'Erro ao atualizar credenciais')
+        })
+      }
+      toast.sucesso('Alterações salvas com sucesso!')
+    } else {
+      await $fetch('/api/admin/create-atendente', {
+        method: 'POST',
+        body: {
+          nome: form.value.nome.trim(),
+          email: form.value.email.trim(),
+          senha: form.value.senha,
+          unidadeId: form.value.unidadeId,
+        },
+      })
+      toast.sucesso('Atendente cadastrado com sucesso!')
+    }
     modalAberto.value = false
-    toast.sucesso('Atendente cadastrado com sucesso!')
     await carregar()
   } catch (e: any) {
-    erro.value = e?.data?.message ?? 'Erro ao cadastrar atendente.'
+    erro.value = e?.data?.message ?? e?.message ?? 'Erro ao salvar atendente.'
   } finally {
     salvando.value = false
   }
@@ -134,6 +177,9 @@ async function salvar() {
           </span>
         </div>
         <div class="flex gap-2 pt-2 mt-auto" style="border-top:1px solid var(--color-border-light)">
+          <UiButton variant="ghost" size="sm" @click="abrirEdicao(a)">
+            <Pencil :size="13" /> Editar
+          </UiButton>
           <UiButton variant="ghost" size="sm" class="flex-1" @click="alternarStatus(a)">
             <Power :size="13" style="color:#dc2626" />
             {{ a.ativo ? 'Desativar' : 'Reativar' }}
@@ -145,33 +191,42 @@ async function salvar() {
       </div>
     </div>
 
-    <UiModal v-if="modalAberto" :model-value="true" title="Novo Atendente" size="sm" @update:model-value="modalAberto = false">
+    <UiModal v-if="modalAberto" :model-value="true" :title="editandoId ? 'Editar Atendente' : 'Novo Atendente'" size="sm" @update:model-value="modalAberto = false">
       <div class="space-y-3">
-        <div>
-          <label class="text-xs font-medium text-[var(--color-text-muted)] block mb-1">Nome *</label>
-          <input v-model="form.nome" type="text" class="input-base" placeholder="Nome completo" />
+        <div v-if="carregandoEdicao" class="py-6 text-center">
+          <div class="inline-block w-5 h-5 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
         </div>
-        <div>
-          <label class="text-xs font-medium text-[var(--color-text-muted)] block mb-1">Unidade *</label>
-          <select v-model="form.unidadeId" class="input-base">
-            <option v-for="u in unidades" :key="u.id" :value="u.id">{{ u.nome }}</option>
-          </select>
-        </div>
-        <div>
-          <label class="text-xs font-medium text-[var(--color-text-muted)] block mb-1">E-mail *</label>
-          <input v-model="form.email" type="email" class="input-base" placeholder="email@exemplo.com" />
-        </div>
-        <div>
-          <label class="text-xs font-medium text-[var(--color-text-muted)] block mb-1">Senha *</label>
-          <input v-model="form.senha" type="password" class="input-base" placeholder="Mínimo 8 caracteres" />
-        </div>
-        <p v-if="erro" class="text-sm rounded-lg p-3" style="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca">
-          {{ erro }}
-        </p>
+        <template v-else>
+          <div>
+            <label class="text-xs font-medium text-[var(--color-text-muted)] block mb-1">Nome *</label>
+            <input v-model="form.nome" type="text" class="input-base" placeholder="Nome completo" />
+          </div>
+          <div>
+            <label class="text-xs font-medium text-[var(--color-text-muted)] block mb-1">Unidade *</label>
+            <select v-model="form.unidadeId" class="input-base">
+              <option v-for="u in unidades" :key="u.id" :value="u.id">{{ u.nome }}</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs font-medium text-[var(--color-text-muted)] block mb-1">E-mail *</label>
+            <input v-model="form.email" type="email" class="input-base" placeholder="email@exemplo.com" />
+          </div>
+          <div>
+            <label class="text-xs font-medium text-[var(--color-text-muted)] block mb-1">
+              Senha {{ editandoId ? '(deixe em branco para manter)' : '*' }}
+            </label>
+            <input v-model="form.senha" type="password" class="input-base" placeholder="Mínimo 8 caracteres" />
+          </div>
+          <p v-if="erro" class="text-sm rounded-lg p-3" style="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca">
+            {{ erro }}
+          </p>
+        </template>
       </div>
       <template #footer>
         <UiButton variant="ghost" :disabled="salvando" @click="modalAberto = false">Cancelar</UiButton>
-        <UiButton variant="primary" :loading="salvando" @click="salvar">Cadastrar</UiButton>
+        <UiButton variant="primary" :loading="salvando" :disabled="carregandoEdicao" @click="salvar">
+          {{ editandoId ? 'Salvar' : 'Cadastrar' }}
+        </UiButton>
       </template>
     </UiModal>
   </div>
