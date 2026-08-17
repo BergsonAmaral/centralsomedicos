@@ -101,8 +101,18 @@ export const useDocumentos = () => {
 
     const docDef = {
       // Papel timbrado: logo + nome da clínica no topo e rodapé com
-      // paginação em TODAS as páginas do documento, não só na primeira.
+      // paginação em TODAS as páginas do documento, não só na primeira —
+      // mais a logo em marca d'água, bem apagada, atrás do texto.
       pageMargins: [40, 90, 40, 60] as [number, number, number, number],
+      background: logoBase64
+        ? () => ({
+            image: logoBase64,
+            width: 260,
+            opacity: 0.06,
+            // Logo é 600x248 — mantém a proporção real pra não distorcer
+            absolutePosition: { x: (595.28 - 260) / 2, y: (841.89 - 260 * (248 / 600)) / 2 },
+          })
+        : undefined,
       header: {
         margin: [40, 24, 40, 0],
         stack: [

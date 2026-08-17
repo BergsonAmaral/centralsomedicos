@@ -246,6 +246,14 @@ async function exportarPDF() {
 
     const docDef = {
       pageMargins: [40, 90, 40, 60] as [number, number, number, number],
+      background: logoBase64
+        ? () => ({
+            image: logoBase64,
+            width: 260,
+            opacity: 0.06,
+            absolutePosition: { x: (595.28 - 260) / 2, y: (841.89 - 260 * (248 / 600)) / 2 },
+          })
+        : undefined,
       header: {
         margin: [40, 24, 40, 0],
         stack: [
