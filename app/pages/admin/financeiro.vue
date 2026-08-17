@@ -36,7 +36,10 @@ function gerarPaginas(atual: number, total: number): (number | '...')[] {
 const dataIni = ref(inicioMes())
 const dataFim = ref(hoje())
 const medicoFiltro = ref('')
-const medicos = ref<{ id: string; nome: string; especialidade: string; valor_consulta: number | null; valor_hora: number | null }[]>([])
+const medicos = ref<{
+  id: string; nome: string; especialidade: string; valor_consulta: number | null; valor_hora: number | null
+  dias_atendimento: number[] | null; horario_inicio: string | null; horario_fim: string | null
+}[]>([])
 
 // Dados
 const carregando = ref(false)
@@ -49,8 +52,33 @@ interface RowMedico {
   valorHora: number | null
   consultas: number
   minutosTrabalhados: number
+  minutosContratados: number
   receitaTotal: number
   ticketMedio: number
+}
+
+// Quantos minutos o médico deveria ter ficado disponível no período, com
+// base no expediente cadastrado (dias da semana + horário) — pra comparar
+// com o que ele realmente ficou online atendendo (minutosTrabalhados).
+function calcularMinutosContratados(
+  diasAtendimento: number[] | null, horarioInicio: string | null, horarioFim: string | null,
+  ini: string, fim: string
+): number {
+  if (!diasAtendimento?.length || !horarioInicio || !horarioFim) return 0
+  const [hi = 0, mi = 0] = horarioInicio.split(':').map(Number)
+  const [hf = 0, mf = 0] = horarioFim.split(':').map(Number)
+  const minutosPorDia = Math.max(0, (hf * 60 + mf) - (hi * 60 + mi))
+  if (!minutosPorDia) return 0
+
+  const diasSet = new Set(diasAtendimento)
+  let dias = 0
+  const cursor = new Date(ini + 'T12:00:00')
+  const limite = new Date(fim + 'T12:00:00')
+  while (cursor <= limite) {
+    if (diasSet.has(cursor.getDay())) dias++
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  return dias * minutosPorDia
 }
 
 const linhas = ref<RowMedico[]>([])
@@ -72,6 +100,7 @@ const medicoTopReceita = computed(() =>
   [...linhas.value].sort((a, b) => b.receitaTotal - a.receitaTotal)[0] ?? null
 )
 const totalMinutos = computed(() => linhas.value.reduce((s, r) => s + r.minutosTrabalhados, 0))
+const totalMinutosContratados = computed(() => linhas.value.reduce((s, r) => s + r.minutosContratados, 0))
 
 async function carregar() {
   carregando.value = true
@@ -80,7 +109,7 @@ async function carregar() {
   // Buscar todos os médicos com valor_consulta / valor_hora
   const { data: meds } = await supabase
     .from('medicos')
-    .select('id, nome, especialidade, valor_consulta, valor_hora')
+    .select('id, nome, especialidade, valor_consulta, valor_hora, dias_atendimento, horario_inicio, horario_fim')
     .eq('ativo', true)
     .order('nome')
   medicos.value = (meds ?? []) as typeof medicos.value
@@ -127,6 +156,7 @@ async function carregar() {
         valorHora: m.valor_hora,
         consultas: qtd,
         minutosTrabalhados: minutos,
+        minutosContratados: calcularMinutosContratados(m.dias_atendimento, m.horario_inicio, m.horario_fim, dataIni.value, dataFim.value),
         receitaTotal: receita,
         ticketMedio: qtd ? receita / qtd : 0,
       }
@@ -184,8 +214,8 @@ function setPeriodo(p: 'hoje' | '7d' | '30d' | 'mes') {
 
 function exportarCSV() {
   const linhasCSV = [
-    ['Médico', 'Especialidade', 'Valor/Consulta', 'Valor/Hora', 'Consultas', 'Horas Trabalhadas', 'Receita Total'],
-    ...linhas.value.map(r => [r.nome, r.especialidade, r.valorConsulta, r.valorHora ?? '', r.consultas, (r.minutosTrabalhados / 60).toFixed(2), r.receitaTotal]),
+    ['Médico', 'Especialidade', 'Valor/Consulta', 'Valor/Hora', 'Consultas', 'Horas Contratadas', 'Horas Trabalhadas', 'Receita Total'],
+    ...linhas.value.map(r => [r.nome, r.especialidade, r.valorConsulta, r.valorHora ?? '', r.consultas, (r.minutosContratados / 60).toFixed(2), (r.minutosTrabalhados / 60).toFixed(2), r.receitaTotal]),
   ]
   const csv = linhasCSV.map(l => l.join(',')).join('\n')
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -227,18 +257,20 @@ async function exportarPDF() {
     const geradoEm = new Date().toLocaleString('pt-BR')
 
     const corpoTabela = [
-      ['Médico', 'Especialidade', 'Valor', 'Consultas', 'Horas', 'Receita'].map(t => ({ text: t, style: 'th' })),
+      ['Médico', 'Especialidade', 'Valor', 'Consultas', 'Contratadas', 'Online', 'Receita'].map(t => ({ text: t, style: 'th' })),
       ...linhas.value.map(r => [
         r.nome,
         r.especialidade,
         r.valorHora ? `${fmtBRL(r.valorHora)}/h` : fmtBRL(r.valorConsulta),
         String(r.consultas),
+        r.minutosContratados ? fmtHoras(r.minutosContratados) : '—',
         fmtHoras(r.minutosTrabalhados),
         { text: fmtBRL(r.receitaTotal), bold: true },
       ]),
       [
         { text: 'Total', colSpan: 3, bold: true }, {}, {},
         { text: String(totalConsultas.value), bold: true },
+        { text: fmtHoras(totalMinutosContratados.value), bold: true },
         { text: fmtHoras(totalMinutos.value), bold: true },
         { text: fmtBRL(receitaTotal.value), bold: true, color: '#16a34a' },
       ],
@@ -299,7 +331,7 @@ async function exportarPDF() {
         },
         '\n\n',
         {
-          table: { headerRows: 1, widths: ['*', 'auto', 'auto', 'auto', 'auto', 'auto'], body: corpoTabela },
+          table: { headerRows: 1, widths: ['*', 'auto', 'auto', 'auto', 'auto', 'auto', 'auto'], body: corpoTabela },
           layout: {
             fillColor: (i: number) => (i === 0 ? '#eff6ff' : i === corpoTabela.length - 1 ? '#f8fafc' : null),
             hLineColor: () => '#e2e8f0',
@@ -335,21 +367,21 @@ async function exportarExcel() {
     ['Relatório Financeiro'],
     [`Período: ${periodoLabel()}`],
     [],
-    ['Médico', 'Especialidade', 'Valor/Consulta', 'Valor/Hora', 'Consultas', 'Horas Trabalhadas', 'Receita Total'],
+    ['Médico', 'Especialidade', 'Valor/Consulta', 'Valor/Hora', 'Consultas', 'Horas Contratadas', 'Horas Online', 'Receita Total'],
     ...linhas.value.map(r => [
       r.nome, r.especialidade, r.valorConsulta, r.valorHora ?? '', r.consultas,
-      Number((r.minutosTrabalhados / 60).toFixed(2)), r.receitaTotal,
+      Number((r.minutosContratados / 60).toFixed(2)), Number((r.minutosTrabalhados / 60).toFixed(2)), r.receitaTotal,
     ]),
     [],
-    ['Total', '', '', '', totalConsultas.value, Number((totalMinutos.value / 60).toFixed(2)), receitaTotal.value],
+    ['Total', '', '', '', totalConsultas.value, Number((totalMinutosContratados.value / 60).toFixed(2)), Number((totalMinutos.value / 60).toFixed(2)), receitaTotal.value],
   ]
 
   const ws = XLSX.utils.aoa_to_sheet(linhasPlanilha)
-  ws['!cols'] = [{ wch: 26 }, { wch: 18 }, { wch: 14 }, { wch: 12 }, { wch: 11 }, { wch: 16 }, { wch: 14 }]
+  ws['!cols'] = [{ wch: 26 }, { wch: 18 }, { wch: 14 }, { wch: 12 }, { wch: 11 }, { wch: 16 }, { wch: 14 }, { wch: 14 }]
   ws['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } },
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 6 } },
-    { s: { r: 2, c: 0 }, e: { r: 2, c: 6 } },
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: 7 } },
+    { s: { r: 2, c: 0 }, e: { r: 2, c: 7 } },
   ]
 
   const wb = XLSX.utils.book_new()
@@ -558,6 +590,67 @@ async function exportarExcel() {
               <td class="px-4 py-3 hidden sm:table-cell font-bold text-sm" style="color:var(--color-text-muted)">{{ fmtHoras(totalMinutos) }}</td>
               <td class="px-4 py-3 font-bold text-lg" style="color:#16a34a">{{ fmtBRL(receitaTotal) }}</td>
               <td class="px-4 py-3 hidden lg:table-cell" />
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Horas contratadas x horas efetivamente atendendo -->
+      <div class="bg-white rounded-2xl border overflow-hidden" style="border-color:var(--color-border)">
+        <div class="px-5 py-4 border-b" style="border-color:var(--color-border-light)">
+          <p class="font-semibold text-[var(--color-text)]">Horas Contratadas × Online com Paciente</p>
+          <p class="text-xs mt-0.5" style="color:var(--color-text-muted)">
+            Contratadas = expediente cadastrado (dias + horário) no período. Online = soma da duração das consultas realizadas.
+          </p>
+        </div>
+        <div v-if="!linhas.length" class="py-12 text-center">
+          <Clock :size="32" class="mx-auto mb-3" style="color:var(--color-text-dim)" />
+          <p class="text-sm" style="color:var(--color-text-muted)">Nenhum médico no período selecionado</p>
+        </div>
+        <table v-else class="w-full text-sm">
+          <thead>
+            <tr style="background:var(--color-surface-2);border-bottom:1px solid var(--color-border-light)">
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide" style="color:var(--color-text-muted)">Médico</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide" style="color:var(--color-text-muted)">Contratadas</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide" style="color:var(--color-text-muted)">Online c/ Paciente</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide" style="color:var(--color-text-muted)">Aproveitamento</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="r in linhas" :key="r.id" class="border-b" style="border-color:var(--color-border-light)">
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-2">
+                  <UiAvatar :name="r.nome" size="xs" />
+                  <span class="font-medium text-[var(--color-text)]">{{ r.nome }}</span>
+                </div>
+              </td>
+              <td class="px-4 py-3 text-sm" style="color:var(--color-text-muted)">
+                <span v-if="r.minutosContratados">{{ fmtHoras(r.minutosContratados) }}</span>
+                <span v-else class="text-xs px-2 py-0.5 rounded-full" style="background:#fef3c7;color:#d97706">Sem expediente cadastrado</span>
+              </td>
+              <td class="px-4 py-3 text-sm font-semibold" style="color:#0284c7">{{ fmtHoras(r.minutosTrabalhados) }}</td>
+              <td class="px-4 py-3">
+                <div v-if="r.minutosContratados" class="flex items-center gap-2">
+                  <div class="flex-1 h-1.5 rounded-full overflow-hidden" style="background:#f1f5f9;max-width:100px">
+                    <div
+                      class="h-full rounded-full"
+                      :style="`width:${Math.min(100, Math.round((r.minutosTrabalhados / r.minutosContratados) * 100))}%;background:${r.minutosTrabalhados > r.minutosContratados ? '#dc2626' : '#16a34a'}`"
+                    />
+                  </div>
+                  <span class="text-xs font-semibold" style="color:var(--color-text-muted)">
+                    {{ Math.round((r.minutosTrabalhados / r.minutosContratados) * 100) }}%
+                  </span>
+                </div>
+                <span v-else class="text-xs" style="color:var(--color-text-dim)">—</span>
+              </td>
+            </tr>
+            <tr style="background:var(--color-surface-2);border-top:2px solid var(--color-border)">
+              <td class="px-4 py-3 font-bold text-[var(--color-text)]">Total</td>
+              <td class="px-4 py-3 font-bold text-sm" style="color:var(--color-text-muted)">{{ fmtHoras(totalMinutosContratados) }}</td>
+              <td class="px-4 py-3 font-bold text-sm" style="color:#0284c7">{{ fmtHoras(totalMinutos) }}</td>
+              <td class="px-4 py-3 font-bold text-sm" style="color:var(--color-text-muted)">
+                {{ totalMinutosContratados ? Math.round((totalMinutos / totalMinutosContratados) * 100) : 0 }}%
+              </td>
             </tr>
           </tbody>
         </table>
