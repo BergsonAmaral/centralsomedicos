@@ -54,6 +54,9 @@ export const useDocumentos = () => {
       }
     }
 
+    // Logo no cabeçalho de todo documento gerado
+    const logoBase64 = await urlParaBase64(`${window.location.origin}/logo.png`)
+
     // Bloco de assinatura no rodapé
     const assinaturaBase64 = (medico as any).assinatura_url
       ? await urlParaBase64((medico as any).assinatura_url)
@@ -96,7 +99,10 @@ export const useDocumentos = () => {
 
     const docDef = {
       content: [
-        { text: 'SoMedicos — Teleconsultas', style: 'clinica' },
+        ...(logoBase64
+          ? [{ image: logoBase64, width: 120, margin: [0, 0, 0, 6] } as unknown]
+          : []),
+        { text: 'Central SóMedicos', style: 'clinica' },
         {
           text: `Dr(a). ${medico.nome} | CRM: ${medico.crm} | ${medico.especialidade}`,
           style: 'medico',
