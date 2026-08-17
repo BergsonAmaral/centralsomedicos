@@ -106,8 +106,9 @@ const periodoAtivo = computed(() => {
 
 // Nova consulta
 const novoModal = ref(false)
-const novoForm = ref({ paciente_cpf: '', medico_id: '', data_consulta: '', motivo: '' })
-const novoPaciente = ref<{ id: string; nome: string } | null>(null)
+const novoForm = ref({ paciente_busca: '', medico_id: '', data_consulta: '', motivo: '' })
+const novoPaciente = ref<{ id: string; nome: string; cpf?: string } | null>(null)
+const resultadosPaciente = ref<{ id: string; nome: string; cpf: string }[]>([])
 const buscandoPaciente = ref(false)
 const erroPaciente = ref('')
 const criandoNovo = ref(false)
@@ -115,29 +116,42 @@ const criandoNovo = ref(false)
 function abrirNovo() {
   const hoje = new Date()
   novoForm.value = {
-    paciente_cpf: '',
+    paciente_busca: '',
     medico_id: medicos.value[0]?.id ?? '',
     data_consulta: `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`,
     motivo: '',
   }
   novoPaciente.value = null
+  resultadosPaciente.value = []
   erroPaciente.value = ''
   novoModal.value = true
 }
 
+// Busca por nome ou CPF — mesmo critério usado na lista de pacientes:
+// 6+ dígitos seguidos vira busca por CPF, senão busca por nome.
 let debounceNovo: ReturnType<typeof setTimeout>
 async function buscarPaciente() {
-  const cpf = novoForm.value.paciente_cpf.replace(/\D/g, '')
-  if (cpf.length < 11) { novoPaciente.value = null; erroPaciente.value = ''; return }
+  novoPaciente.value = null
+  const termo = novoForm.value.paciente_busca.trim()
+  const somenteDigitos = termo.replace(/\D/g, '')
+  if (termo.length < 2) { resultadosPaciente.value = []; erroPaciente.value = ''; return }
   clearTimeout(debounceNovo)
   debounceNovo = setTimeout(async () => {
     buscandoPaciente.value = true
     erroPaciente.value = ''
-    const { data } = await supabase.from('pacientes').select('id, nome').eq('cpf', cpf).maybeSingle()
+    let q = supabase.from('pacientes').select('id, nome, cpf').order('nome').limit(8)
+    q = somenteDigitos.length >= 6 ? q.ilike('cpf', `%${somenteDigitos}%`) : q.ilike('nome', `%${termo}%`)
+    const { data } = await q
     buscandoPaciente.value = false
-    if (data) { novoPaciente.value = data }
-    else { novoPaciente.value = null; erroPaciente.value = 'Paciente não encontrado. Cadastre primeiro em Pacientes.' }
-  }, 400)
+    resultadosPaciente.value = data ?? []
+    if (!resultadosPaciente.value.length) erroPaciente.value = 'Nenhum paciente encontrado. Cadastre primeiro em Pacientes.'
+  }, 350)
+}
+
+function escolherPaciente(p: { id: string; nome: string; cpf: string }) {
+  novoPaciente.value = p
+  novoForm.value.paciente_busca = p.nome
+  resultadosPaciente.value = []
 }
 
 async function criarConsulta() {
@@ -446,18 +460,36 @@ const paginasVisiveis = computed(() => {
   <!-- Modal nova consulta -->
   <UiModal v-if="novoModal" :model-value="true" title="Nova Consulta" size="md" @update:model-value="novoModal = false">
     <div class="space-y-4">
-      <div>
-        <label class="text-sm font-medium text-[var(--color-text-muted)] block mb-1">CPF do Paciente</label>
+      <div class="relative">
+        <label class="text-sm font-medium text-[var(--color-text-muted)] block mb-1">Paciente (nome ou CPF)</label>
         <input
-          :value="novoForm.paciente_cpf"
+          v-model="novoForm.paciente_busca"
           type="text"
-          class="input-base font-mono"
-          placeholder="000.000.000-00"
-          @input="novoForm.paciente_cpf = ($event.target as HTMLInputElement).value; buscarPaciente()"
+          class="input-base"
+          placeholder="Digite o nome ou CPF..."
+          @input="buscarPaciente()"
         />
         <p v-if="buscandoPaciente" class="text-xs text-[var(--color-text-muted)] mt-1">Buscando...</p>
-        <p v-else-if="novoPaciente" class="text-xs mt-1" style="color:#16a34a">Paciente: <strong>{{ novoPaciente.nome }}</strong></p>
+        <p v-else-if="novoPaciente" class="text-xs mt-1" style="color:#16a34a">Selecionado: <strong>{{ novoPaciente.nome }}</strong></p>
         <p v-else-if="erroPaciente" class="text-xs mt-1" style="color:#dc2626">{{ erroPaciente }}</p>
+
+        <!-- Resultados da busca -->
+        <div
+          v-if="resultadosPaciente.length"
+          class="absolute z-10 mt-1 w-full rounded-xl border bg-white shadow-lg overflow-hidden"
+          style="border-color:var(--color-border)"
+        >
+          <button
+            v-for="p in resultadosPaciente"
+            :key="p.id"
+            type="button"
+            class="w-full flex items-center justify-between px-3 py-2 text-left text-sm hover:bg-[var(--color-surface-2)] transition-colors"
+            @click="escolherPaciente(p)"
+          >
+            <span class="font-medium text-[var(--color-text)]">{{ p.nome }}</span>
+            <span class="text-xs font-mono text-[var(--color-text-muted)]">{{ p.cpf?.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') }}</span>
+          </button>
+        </div>
       </div>
       <div>
         <label class="text-sm font-medium text-[var(--color-text-muted)] block mb-1">Médico *</label>

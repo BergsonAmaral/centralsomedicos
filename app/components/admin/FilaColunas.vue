@@ -12,6 +12,28 @@ const props = withDefaults(defineProps<Props>(), { medicoFiltro: null, unidadeFi
 
 const fila = useFila()
 const toast = useToast()
+const supabase = useSupabaseClient()
+
+// Todas as unidades e salas ativas — carregadas uma vez, pra fila sempre
+// mostrar a estrutura completa (mesmo unidade/sala sem ninguém agora),
+// não só quem tem paciente no momento.
+interface UnidadeOpcao { id: string; nome: string }
+interface SalaOpcao { id: string; slug: string; nome: string; unidade_id: string }
+const todasUnidades = ref<UnidadeOpcao[]>([])
+const todasSalas = ref<SalaOpcao[]>([])
+
+onMounted(async () => {
+  const [{ data: uData }, { data: sData }] = await Promise.all([
+    supabase.from('unidades').select('id, nome').eq('ativo', true).order('nome'),
+    supabase.from('salas').select('id, slug, nome, unidade_id').eq('ativo', true).order('nome'),
+  ])
+  todasUnidades.value = uData ?? []
+  todasSalas.value = sData ?? []
+})
+
+const unidadesFiltradas = computed(() =>
+  props.unidadeFiltro ? todasUnidades.value.filter((u) => u.id === props.unidadeFiltro) : todasUnidades.value
+)
 
 // Com pacientes chegando de várias unidades ao mesmo tempo, filtra por
 // unidade no cliente (o filtro por médico já é feito no servidor).
@@ -25,30 +47,45 @@ const finalizadosFiltrados = computed(() => porUnidade(fila.finalizados.value))
 
 // Fila organizada em dois níveis — unidade (onde o paciente está
 // fisicamente) e, dentro dela, especialidade do médico — em vez de uma
-// lista só misturada.
-type ComEspecialidade = { medicos?: { especialidade?: string } | null; pacientes?: { unidades?: { nome?: string } | null } | null }
+// lista só misturada. Sempre lista TODAS as unidades cadastradas, mesmo
+// as que não têm ninguém agendado/finalizado agora.
+type ComEspecialidade = { medicos?: { especialidade?: string } | null; pacientes?: { unidade_id?: string | null } | null }
 
-function chaveUnidade(item: ComEspecialidade): string {
-  return item.pacientes?.unidades?.nome || 'Sem unidade'
+function unidadeIdDoItem(item: ComEspecialidade): string {
+  return item.pacientes?.unidade_id || ''
 }
 function chaveEspecialidade(item: ComEspecialidade): string {
   return item.medicos?.especialidade || 'Sem especialidade'
 }
 
 function agruparPorUnidadeEEspecialidade<T extends ComEspecialidade>(lista: T[]) {
-  const grupos: Record<string, Record<string, T[]>> = {}
+  const porUnidadeId: Record<string, T[]> = {}
   for (const item of lista) {
-    const u = chaveUnidade(item)
-    const e = chaveEspecialidade(item)
-    grupos[u] ??= {}
-    ;(grupos[u][e] ??= []).push(item)
+    const uid = unidadeIdDoItem(item)
+    ;(porUnidadeId[uid] ??= []).push(item)
   }
-  return Object.entries(grupos)
-    .sort(([a], [b]) => a.localeCompare(b, 'pt-BR'))
-    .map(([unidade, porEsp]) => [
-      unidade,
+  const resultado = unidadesFiltradas.value.map((u) => {
+    const itens = porUnidadeId[u.id] ?? []
+    const porEsp: Record<string, T[]> = {}
+    for (const item of itens) (porEsp[chaveEspecialidade(item)] ??= []).push(item)
+    return [
+      u.nome,
       Object.entries(porEsp).sort(([a], [b]) => a.localeCompare(b, 'pt-BR')),
-    ] as [string, [string, T[]][]])
+    ] as [string, [string, T[]][]]
+  })
+
+  // Paciente sem unidade cadastrada (ou de uma unidade inativa/apagada) não
+  // pode simplesmente sumir da fila — cai num grupo à parte no final.
+  if (!props.unidadeFiltro) {
+    const idsConhecidos = new Set(unidadesFiltradas.value.map((u) => u.id))
+    const orfaos = lista.filter((item) => !idsConhecidos.has(unidadeIdDoItem(item)))
+    if (orfaos.length) {
+      const porEsp: Record<string, T[]> = {}
+      for (const item of orfaos) (porEsp[chaveEspecialidade(item)] ??= []).push(item)
+      resultado.push(['Sem unidade', Object.entries(porEsp).sort(([a], [b]) => a.localeCompare(b, 'pt-BR'))])
+    }
+  }
+  return resultado
 }
 
 const agendadosPorEsp = computed(() => agruparPorUnidadeEEspecialidade(agendadosFiltrados.value))
@@ -57,21 +94,53 @@ const finalizadosPorEsp = computed(() => agruparPorUnidadeEEspecialidade(finaliz
 // Fila Ativa mostra a posição global (1º, 2º...) mesmo agrupada — a
 // prioridade de chamada não muda, só a organização visual
 interface ItemComIndice { ag: Agendamento; indice: number }
-const filaAtivaPorEsp = computed(() => {
+
+// Mapa completo por unidade: cada sala cadastrada aparece sempre, com quem
+// está nela agora (ou "Livre") — e um grupo à parte pra quem já fez
+// check-in mas ainda não tem sala definida.
+interface SalaComOcupante { sala: SalaOpcao; ocupante: ItemComIndice | null }
+interface UnidadeComSalas { unidade: UnidadeOpcao; salas: SalaComOcupante[]; semSala: ItemComIndice[] }
+
+const mapaFilaAtiva = computed<UnidadeComSalas[]>(() => {
   const comIndice: ItemComIndice[] = filaAtivaFiltrada.value.map((ag, indice) => ({ ag, indice }))
-  const grupos: Record<string, Record<string, ItemComIndice[]>> = {}
+  const porSlug = new Map<string, ItemComIndice>()
+  const semSalaPorUnidadeId = new Map<string, ItemComIndice[]>()
   for (const item of comIndice) {
-    const u = chaveUnidade(item.ag)
-    const e = chaveEspecialidade(item.ag)
-    grupos[u] ??= {}
-    ;(grupos[u][e] ??= []).push(item)
+    if (item.ag.sala_slug) {
+      porSlug.set(item.ag.sala_slug, item)
+    } else {
+      const uid = unidadeIdDoItem(item.ag)
+      ;(semSalaPorUnidadeId.get(uid) ?? semSalaPorUnidadeId.set(uid, []).get(uid)!).push(item)
+    }
   }
-  return Object.entries(grupos)
-    .sort(([a], [b]) => a.localeCompare(b, 'pt-BR'))
-    .map(([unidade, porEsp]) => [
-      unidade,
-      Object.entries(porEsp).sort(([a], [b]) => a.localeCompare(b, 'pt-BR')),
-    ] as [string, [string, ItemComIndice[]][]])
+  // Sala usada pelo paciente mas excluída/desativada depois do check-in —
+  // não pode sumir da fila, então entra junto com quem não tem sala.
+  const slugsConhecidos = new Set(todasSalas.value.map((s) => s.slug))
+  for (const [slug, item] of porSlug) {
+    if (!slugsConhecidos.has(slug)) {
+      const uid = unidadeIdDoItem(item.ag)
+      ;(semSalaPorUnidadeId.get(uid) ?? semSalaPorUnidadeId.set(uid, []).get(uid)!).push(item)
+    }
+  }
+
+  const resultado = unidadesFiltradas.value.map((u) => ({
+    unidade: u,
+    salas: todasSalas.value
+      .filter((s) => s.unidade_id === u.id)
+      .map((s) => ({ sala: s, ocupante: porSlug.get(s.slug) ?? null })),
+    semSala: semSalaPorUnidadeId.get(u.id) ?? [],
+  }))
+
+  // Paciente sem unidade cadastrada não pode sumir da fila — vira um
+  // "grupo unidade" à parte, sem salas (não dá pra saber quais oferecer).
+  if (!props.unidadeFiltro) {
+    const idsConhecidos = new Set(unidadesFiltradas.value.map((u) => u.id))
+    const orfaos = comIndice.filter((item) => !item.ag.sala_slug && !idsConhecidos.has(unidadeIdDoItem(item.ag)))
+    if (orfaos.length) {
+      resultado.push({ unidade: { id: '', nome: 'Sem unidade' }, salas: [], semSala: orfaos })
+    }
+  }
+  return resultado
 })
 
 // Modais
@@ -183,8 +252,8 @@ onUnmounted(() => clearInterval(interval))
         <span class="badge badge-agendado">{{ agendadosFiltrados.length }}</span>
       </div>
 
-      <div v-if="agendadosFiltrados.length === 0" class="card p-6 text-center text-[var(--color-text-dim)] text-sm">
-        Nenhum paciente agendado
+      <div v-if="!unidadesFiltradas.length" class="card p-6 text-center text-[var(--color-text-dim)] text-sm">
+        Nenhuma unidade cadastrada
       </div>
 
       <template v-for="[unidade, grupos] in agendadosPorEsp" :key="unidade">
@@ -192,6 +261,7 @@ onUnmounted(() => clearInterval(interval))
           <Building2 :size="12" style="color:var(--color-text-dim)" />
           <p class="text-xs font-bold" style="color:var(--color-text)">{{ unidade }}</p>
         </div>
+        <p v-if="!grupos.length" class="text-xs pl-4" style="color:var(--color-text-dim)">Nenhum paciente agendado</p>
         <template v-for="[especialidade, lista] in grupos" :key="especialidade">
           <p class="text-[10px] font-bold uppercase tracking-wider pl-4" style="color:var(--color-text-dim)">{{ especialidade }}</p>
           <div
@@ -243,110 +313,53 @@ onUnmounted(() => clearInterval(interval))
         <span class="badge badge-checkin">{{ filaAtivaFiltrada.length }}</span>
       </div>
 
-      <div v-if="filaAtivaFiltrada.length === 0" class="card p-6 text-center text-[var(--color-text-dim)] text-sm">
-        Nenhum na fila
+      <div v-if="!unidadesFiltradas.length" class="card p-6 text-center text-[var(--color-text-dim)] text-sm">
+        Nenhuma unidade cadastrada
       </div>
 
-      <template v-for="[unidade, grupos] in filaAtivaPorEsp" :key="unidade">
+      <template v-for="grupo in mapaFilaAtiva" :key="grupo.unidade.id || 'sem-unidade'">
         <div class="flex items-center gap-1.5 mt-2">
           <Building2 :size="12" style="color:var(--color-text-dim)" />
-          <p class="text-xs font-bold" style="color:var(--color-text)">{{ unidade }}</p>
+          <p class="text-xs font-bold" style="color:var(--color-text)">{{ grupo.unidade.nome }}</p>
         </div>
-        <template v-for="[especialidade, lista] in grupos" :key="especialidade">
-        <p class="text-[10px] font-bold uppercase tracking-wider pl-4" style="color:var(--color-text-dim)">{{ especialidade }}</p>
-        <div
-          v-for="{ ag, indice } in lista"
-          :key="ag.id"
-          :class="[
-            'card p-4 space-y-3',
-            indice === 0 ? 'border-[var(--color-green)] shadow-[var(--shadow-md)]' : '',
-          ]"
-        >
-          <div class="flex items-start justify-between gap-2">
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-2 mb-0.5">
-                <span class="text-xs font-mono font-bold text-[var(--color-text-muted)]">
-                  {{ indice + 1 }}º
-                </span>
-                <p class="font-semibold text-[var(--color-text)] truncate">{{ ag.pacientes?.nome }}</p>
-              </div>
-              <p class="text-xs text-[var(--color-text-muted)]">
-                {{ ag.medicos?.nome }}<span v-if="ag.medicos?.especialidade"> · {{ ag.medicos.especialidade }}</span>
-              </p>
-              <div class="flex items-center gap-2 mt-1 flex-wrap">
-                <span v-if="ag.sala_slug" class="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style="background:#f5f3ff;color:#7c3aed">
-                  <DoorOpen :size="10" /> {{ ag.sala_slug }}
-                </span>
-                <div class="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
-                  <Clock :size="11" />
-                  {{ horaFormatada(ag.checkin_em) }} · {{ tempoEspera(ag.checkin_em) }} espera
-                </div>
-              </div>
-            </div>
-            <div class="flex flex-col gap-1 shrink-0">
-              <UiBadge v-if="ag.triagem?.urgencia" variant="urgencia" />
-              <UiBadge v-if="ag.triagem?.alergia" variant="alergia" />
-              <UiBadge v-if="ag.triagem?.febre" variant="febre" />
-            </div>
-          </div>
 
-          <!-- Ainda na fila: dá para corrigir a triagem antes de encaminhar -->
-          <div v-if="ag.status === 'checkin'" class="flex gap-2">
-            <UiButton
-              variant="success"
-              size="sm"
-              class="flex-1"
-              @click="chamarModal = ag"
-            >
-              <PhoneCall :size="14" /> Encaminhar →
-            </UiButton>
-            <UiButton
-              variant="ghost"
-              size="sm"
-              title="Editar triagem, sinais vitais e sala"
-              @click="checkinModal = ag"
-            >
-              <Pencil :size="13" />
-            </UiButton>
-          </div>
+        <p v-if="!grupo.salas.length && !grupo.semSala.length" class="text-xs pl-4" style="color:var(--color-text-dim)">
+          Nenhuma sala cadastrada nessa unidade
+        </p>
 
-          <!-- Já encaminhado: mostra o status e mantém o controle com o admin -->
-          <div v-else class="space-y-2">
-            <div
-              class="w-full text-center text-xs font-semibold py-2 rounded-lg"
-              :style="ag.status === 'em_consulta'
-                ? 'background:#dcfce7;color:#166534'
-                : 'background:#fef9c3;color:#854d0e'"
-            >
-              {{
-                ag.status === 'aguardando_medico' ? 'Chamando médico…'
-                : ag.status === 'aguardando_paciente' ? 'Aguardando paciente entrar…'
-                : 'Em consulta'
-              }}
-            </div>
-            <div class="flex gap-2">
-              <UiButton
-                variant="ghost"
-                size="sm"
-                class="flex-1"
-                title="Desfaz o encaminhamento e devolve o paciente para a fila"
-                :loading="revertendo === ag.id"
-                @click="voltarParaFila(ag)"
-              >
-                <Undo2 :size="13" /> Voltar p/ fila
-              </UiButton>
-              <UiButton
-                variant="ghost"
-                size="sm"
-                title="Cancelar definitivamente este atendimento"
-                :loading="revertendo === ag.id"
-                @click="cancelarAtendimento(ag)"
-              >
-                <Ban :size="13" style="color:#dc2626" />
-              </UiButton>
-            </div>
+        <!-- Todas as salas da unidade — mesmo vazias -->
+        <template v-for="sc in grupo.salas" :key="sc.sala.id">
+          <AdminFilaAtivaCard
+            v-if="sc.ocupante"
+            :ag="sc.ocupante.ag"
+            :indice="sc.ocupante.indice"
+            :revertendo="revertendo"
+            @chamar="chamarModal = $event"
+            @checkin="checkinModal = $event"
+            @voltar="voltarParaFila"
+            @cancelar="cancelarAtendimento"
+          />
+          <div v-else class="card p-3 flex items-center gap-2 opacity-60">
+            <DoorOpen :size="14" style="color:var(--color-text-dim)" />
+            <span class="text-sm font-medium" style="color:var(--color-text-muted)">{{ sc.sala.nome }}</span>
+            <span class="ml-auto text-[10px] font-semibold uppercase tracking-wide" style="color:var(--color-text-dim)">Livre</span>
           </div>
-        </div>
+        </template>
+
+        <!-- Check-in feito mas sala ainda não definida (ou sala apagada depois) -->
+        <template v-if="grupo.semSala.length">
+          <p class="text-[10px] font-bold uppercase tracking-wider pl-4" style="color:var(--color-text-dim)">Sem sala definida</p>
+          <AdminFilaAtivaCard
+            v-for="{ ag, indice } in grupo.semSala"
+            :key="ag.id"
+            :ag="ag"
+            :indice="indice"
+            :revertendo="revertendo"
+            @chamar="chamarModal = $event"
+            @checkin="checkinModal = $event"
+            @voltar="voltarParaFila"
+            @cancelar="cancelarAtendimento"
+          />
         </template>
       </template>
     </div>
@@ -360,8 +373,8 @@ onUnmounted(() => clearInterval(interval))
         <span class="badge badge-concluido">{{ finalizadosFiltrados.length }}</span>
       </div>
 
-      <div v-if="finalizadosFiltrados.length === 0" class="card p-6 text-center text-[var(--color-text-dim)] text-sm">
-        Nenhum finalizado
+      <div v-if="!unidadesFiltradas.length" class="card p-6 text-center text-[var(--color-text-dim)] text-sm">
+        Nenhuma unidade cadastrada
       </div>
 
       <template v-for="[unidade, grupos] in finalizadosPorEsp" :key="unidade">
@@ -369,6 +382,7 @@ onUnmounted(() => clearInterval(interval))
           <Building2 :size="12" style="color:var(--color-text-dim)" />
           <p class="text-xs font-bold" style="color:var(--color-text)">{{ unidade }}</p>
         </div>
+        <p v-if="!grupos.length" class="text-xs pl-4" style="color:var(--color-text-dim)">Nenhum finalizado</p>
         <template v-for="[especialidade, lista] in grupos" :key="especialidade">
         <p class="text-[10px] font-bold uppercase tracking-wider pl-4" style="color:var(--color-text-dim)">{{ especialidade }}</p>
         <div
