@@ -1,13 +1,49 @@
 <script setup lang="ts">
-import { Phone, Mail, IdCard, Calendar, AlertTriangle, History, ChevronDown, Activity } from 'lucide-vue-next'
-import type { Agendamento, Consulta } from '~/types'
+import { Phone, Mail, IdCard, Calendar, AlertTriangle, History, ChevronDown, Activity, FileText } from 'lucide-vue-next'
+import type { Agendamento, Consulta, Documento } from '~/types'
 
 const props = defineProps<{ agendamento: Agendamento }>()
 
 const supabase = useSupabaseClient()
+const { resolverUrlAssinada } = useDocumentos()
 const historicoAberto = ref(false)
 const consultasAnteriores = ref<Consulta[]>([])
 const carregandoHist = ref(false)
+
+// Documentos já emitidos pro paciente (atestado, receita, exame...) — sem
+// isso o médico não tinha como saber o que já foi passado antes, e corria
+// o risco de duplicar ou contradizer um documento anterior.
+const documentosAberto = ref(false)
+const documentosAnteriores = ref<Documento[]>([])
+const carregandoDocs = ref(false)
+const TIPOS_LABELS: Record<string, string> = {
+  atestado: 'Atestado',
+  pedido_exame: 'Pedido de Exame',
+  receita: 'Receita',
+  receita_controlada: 'Receita Controlada',
+  encaminhamento: 'Encaminhamento',
+  declaracao: 'Declaração',
+}
+
+async function toggleDocumentos() {
+  documentosAberto.value = !documentosAberto.value
+  if (documentosAberto.value && !documentosAnteriores.value.length) {
+    carregandoDocs.value = true
+    const { data } = await supabase
+      .from('documentos')
+      .select('*')
+      .eq('paciente_id', paciente.value?.id)
+      .order('created_at', { ascending: false })
+    documentosAnteriores.value = (data ?? []) as Documento[]
+    carregandoDocs.value = false
+  }
+}
+
+async function abrirDocumento(doc: Documento) {
+  if (!doc.pdf_url) return
+  const url = await resolverUrlAssinada(doc.pdf_url)
+  if (url) window.open(url, '_blank', 'noopener')
+}
 
 const paciente = computed(() => props.agendamento.pacientes as any)
 const triagem = computed(() => props.agendamento.triagem ?? ({} as any))
@@ -225,6 +261,56 @@ const alertas = computed(() => {
             {{ c.evolucao ?? 'Sem evolução registrada.' }}
           </p>
         </div>
+      </div>
+    </div>
+
+    <!-- Documentos já emitidos (atestado, receita, exame...) -->
+    <div>
+      <button
+        type="button"
+        class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-semibold transition-colors"
+        style="background:#f8fafc;color:#475569"
+        @click="toggleDocumentos"
+      >
+        <span class="flex items-center gap-2">
+          <FileText :size="14" />
+          Documentos anteriores
+        </span>
+        <ChevronDown
+          :size="16"
+          class="transition-transform"
+          :style="documentosAberto ? 'transform:rotate(180deg)' : ''"
+        />
+      </button>
+
+      <div v-if="documentosAberto" class="mt-2 space-y-2">
+        <div v-if="carregandoDocs" class="py-3 text-center text-xs text-[var(--color-text-muted)]">
+          Carregando…
+        </div>
+        <div
+          v-else-if="documentosAnteriores.length === 0"
+          class="py-3 text-center text-xs text-[var(--color-text-muted)]"
+        >
+          Nenhum documento emitido ainda.
+        </div>
+        <button
+          v-for="d in documentosAnteriores"
+          :key="d.id"
+          type="button"
+          class="w-full flex items-center justify-between rounded-lg border p-3 text-xs text-left transition-colors hover:bg-[#f8fafc]"
+          style="border-color:#e2e8f0"
+          @click="abrirDocumento(d)"
+        >
+          <div class="min-w-0">
+            <p class="font-semibold text-[var(--color-text)]">{{ TIPOS_LABELS[d.tipo] ?? d.tipo }}</p>
+            <div class="flex items-center gap-1.5 text-[var(--color-text-muted)] mt-0.5">
+              <Calendar :size="11" style="color:#94a3b8" />
+              {{ new Date(d.created_at).toLocaleDateString('pt-BR') }}
+              <span style="color:#cbd5e1">•</span>
+              {{ d.status === 'gerado' ? 'Gerado' : d.status === 'enviado_paciente' ? 'Enviado' : 'Arquivado' }}
+            </div>
+          </div>
+        </button>
       </div>
     </div>
   </div>
