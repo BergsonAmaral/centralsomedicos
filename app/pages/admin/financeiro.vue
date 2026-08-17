@@ -2,6 +2,7 @@
 import {
   DollarSign, TrendingUp, Users, BarChart3,
   CalendarDays, ChevronLeft, ChevronRight, Filter, Clock,
+  FileText, FileSpreadsheet,
 } from 'lucide-vue-next'
 
 definePageMeta({ layout: 'admin', middleware: ['auth', 'role'] })
@@ -193,6 +194,160 @@ function exportarCSV() {
   a.href = url; a.download = `financeiro_${dataIni.value}_${dataFim.value}.csv`; a.click()
   URL.revokeObjectURL(url)
 }
+
+function periodoLabel() {
+  const f = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('pt-BR')
+  return `${f(dataIni.value)} a ${f(dataFim.value)}`
+}
+
+async function urlParaBase64(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url)
+    const blob = await res.blob()
+    return await new Promise((resolve) => {
+      const reader = new FileReader()
+      reader.onloadend = () => resolve(reader.result as string)
+      reader.onerror = () => resolve(null)
+      reader.readAsDataURL(blob)
+    })
+  } catch {
+    return null
+  }
+}
+
+const exportandoPDF = ref(false)
+async function exportarPDF() {
+  exportandoPDF.value = true
+  try {
+    const { default: pdfMake } = await import('pdfmake/build/pdfmake')
+    const { default: vfsFonts } = await import('pdfmake/build/vfs_fonts')
+    pdfMake.vfs = vfsFonts.vfs
+
+    const logoBase64 = await urlParaBase64(`${window.location.origin}/logo.png`)
+    const geradoEm = new Date().toLocaleString('pt-BR')
+
+    const corpoTabela = [
+      ['Médico', 'Especialidade', 'Valor', 'Consultas', 'Horas', 'Receita'].map(t => ({ text: t, style: 'th' })),
+      ...linhas.value.map(r => [
+        r.nome,
+        r.especialidade,
+        r.valorHora ? `${fmtBRL(r.valorHora)}/h` : fmtBRL(r.valorConsulta),
+        String(r.consultas),
+        fmtHoras(r.minutosTrabalhados),
+        { text: fmtBRL(r.receitaTotal), bold: true },
+      ]),
+      [
+        { text: 'Total', colSpan: 3, bold: true }, {}, {},
+        { text: String(totalConsultas.value), bold: true },
+        { text: fmtHoras(totalMinutos.value), bold: true },
+        { text: fmtBRL(receitaTotal.value), bold: true, color: '#16a34a' },
+      ],
+    ]
+
+    const docDef = {
+      pageMargins: [40, 90, 40, 60] as [number, number, number, number],
+      header: {
+        margin: [40, 24, 40, 0],
+        stack: [
+          {
+            columns: [
+              ...(logoBase64 ? [{ image: logoBase64, width: 90 } as unknown] : []),
+              {
+                width: '*',
+                stack: [
+                  { text: 'Central SóMedicos', style: 'clinica', alignment: 'right' },
+                  { text: 'Relatório Financeiro', style: 'clinicaSub', alignment: 'right' },
+                ],
+              },
+            ],
+          },
+          { canvas: [{ type: 'line', x1: 0, y1: 8, x2: 515, y2: 8, lineWidth: 1.2, lineColor: '#2563eb' }] },
+        ],
+      },
+      footer: (currentPage: number, pageCount: number) => ({
+        margin: [40, 8, 40, 0],
+        stack: [
+          { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 0.5, lineColor: '#94a3b8' }] },
+          {
+            columns: [
+              { text: 'Central SóMedicos', style: 'rodape' },
+              { text: `Gerado em ${geradoEm}`, style: 'rodape', alignment: 'center' },
+              { text: `Página ${currentPage} de ${pageCount}`, style: 'rodape', alignment: 'right' },
+            ],
+          },
+        ],
+      }),
+      content: [
+        { text: 'Relatório Financeiro', style: 'titulo' },
+        { text: `Período: ${periodoLabel()}${medicoFiltro.value ? ' · ' + (medicos.value.find(m => m.id === medicoFiltro.value)?.nome ?? '') : ''}`, style: 'subtitulo' },
+        '\n',
+        {
+          columns: [
+            { text: [{ text: 'Receita Total\n', style: 'kpiLabel' }, { text: fmtBRL(receitaTotal.value), style: 'kpiValor' }] },
+            { text: [{ text: 'Consultas\n', style: 'kpiLabel' }, { text: String(totalConsultas.value), style: 'kpiValor' }] },
+            { text: [{ text: 'Horas Trabalhadas\n', style: 'kpiLabel' }, { text: fmtHoras(totalMinutos.value), style: 'kpiValor' }] },
+            { text: [{ text: 'Ticket Médio\n', style: 'kpiLabel' }, { text: fmtBRL(ticketMedioGeral.value), style: 'kpiValor' }] },
+          ],
+        },
+        '\n\n',
+        {
+          table: { headerRows: 1, widths: ['*', 'auto', 'auto', 'auto', 'auto', 'auto'], body: corpoTabela },
+          layout: {
+            fillColor: (i: number) => (i === 0 ? '#eff6ff' : i === corpoTabela.length - 1 ? '#f8fafc' : null),
+            hLineColor: () => '#e2e8f0',
+            vLineWidth: () => 0,
+            hLineWidth: (i: number) => (i === 1 ? 1 : 0.5),
+          },
+        },
+      ],
+      styles: {
+        clinica: { fontSize: 16, bold: true, color: '#2563eb', margin: [0, 0, 0, 2] },
+        clinicaSub: { fontSize: 9, color: '#64748b' },
+        titulo: { fontSize: 16, bold: true, color: '#0f172a' },
+        subtitulo: { fontSize: 10, color: '#64748b', margin: [0, 2, 0, 0] },
+        kpiLabel: { fontSize: 9, color: '#64748b' },
+        kpiValor: { fontSize: 14, bold: true, color: '#0f172a' },
+        th: { bold: true, fontSize: 9, color: '#1d4ed8' },
+        rodape: { fontSize: 8, color: '#94a3b8' },
+      },
+      defaultStyle: { fontSize: 9, lineHeight: 1.3 },
+    }
+
+    pdfMake.createPdf(docDef as any).download(`financeiro_${dataIni.value}_${dataFim.value}.pdf`)
+  } finally {
+    exportandoPDF.value = false
+  }
+}
+
+async function exportarExcel() {
+  const XLSX = await import('xlsx')
+
+  const linhasPlanilha: (string | number)[][] = [
+    ['CENTRAL SÓMEDICOS'],
+    ['Relatório Financeiro'],
+    [`Período: ${periodoLabel()}`],
+    [],
+    ['Médico', 'Especialidade', 'Valor/Consulta', 'Valor/Hora', 'Consultas', 'Horas Trabalhadas', 'Receita Total'],
+    ...linhas.value.map(r => [
+      r.nome, r.especialidade, r.valorConsulta, r.valorHora ?? '', r.consultas,
+      Number((r.minutosTrabalhados / 60).toFixed(2)), r.receitaTotal,
+    ]),
+    [],
+    ['Total', '', '', '', totalConsultas.value, Number((totalMinutos.value / 60).toFixed(2)), receitaTotal.value],
+  ]
+
+  const ws = XLSX.utils.aoa_to_sheet(linhasPlanilha)
+  ws['!cols'] = [{ wch: 26 }, { wch: 18 }, { wch: 14 }, { wch: 12 }, { wch: 11 }, { wch: 16 }, { wch: 14 }]
+  ws['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: 6 } },
+    { s: { r: 2, c: 0 }, e: { r: 2, c: 6 } },
+  ]
+
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Financeiro')
+  XLSX.writeFile(wb, `financeiro_${dataIni.value}_${dataFim.value}.xlsx`)
+}
 </script>
 
 <template>
@@ -203,9 +358,17 @@ function exportarCSV() {
         <h1 class="text-2xl font-bold text-[var(--color-text)]">Financeiro</h1>
         <p class="text-[var(--color-text-muted)] text-sm mt-1">Receita por médico com base nas consultas realizadas</p>
       </div>
-      <UiButton variant="secondary" size="sm" @click="exportarCSV">
-        <BarChart3 :size="15" /> Exportar CSV
-      </UiButton>
+      <div class="flex flex-wrap gap-2">
+        <UiButton variant="secondary" size="sm" :loading="exportandoPDF" @click="exportarPDF">
+          <FileText :size="15" /> Exportar PDF
+        </UiButton>
+        <UiButton variant="secondary" size="sm" @click="exportarExcel">
+          <FileSpreadsheet :size="15" /> Exportar Excel
+        </UiButton>
+        <UiButton variant="ghost" size="sm" @click="exportarCSV">
+          <BarChart3 :size="15" /> CSV
+        </UiButton>
+      </div>
     </div>
 
     <!-- Filtros -->
