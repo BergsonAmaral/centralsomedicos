@@ -47,6 +47,8 @@ export default defineNuxtConfig({
     smtpUser: process.env.SMTP_USER ?? '',
     smtpPass: process.env.SMTP_PASS ?? '',
     smtpFrom: process.env.SMTP_FROM ?? 'SoMedicos <noreply@somedicos.com.br>',
+    dailyApiKey: process.env.DAILY_API_KEY ?? '',
+    dailyDomain: process.env.DAILY_DOMAIN ?? '',
     public: {},
   },
 

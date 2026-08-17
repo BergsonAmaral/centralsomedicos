@@ -90,12 +90,11 @@ const aguardandoPaciente = computed(() =>
   filaStore.filaAtiva.find((a) => a.status === 'aguardando_paciente') ?? null
 )
 
-// No Jitsi público (sem autenticação), quem entra primeiro na sala vira o
-// anfitrião. Antes o médico só entrava quando o status virava "em_consulta"
-// — mas o paciente entra na sala assim que clica "Entrar", antes desse
-// status ser confirmado, então o paciente quase sempre chegava primeiro e
-// ficava com os controles de anfitrião. Agora o médico entra assim que
-// aceita (aguardando_paciente), garantindo que chegue primeiro.
+// Monta o vídeo assim que o médico aceita (aguardando_paciente), não só
+// quando o status vira "em_consulta" — assim ele já está na sala antes do
+// paciente entrar. Com o Daily.co o anfitrião é definido pelo token gerado
+// no servidor (não por quem chega primeiro), mas entrar cedo continua bom
+// pra ele já estar pronto quando o paciente aparecer.
 const consultaAtiva = computed(() => emConsulta.value ?? aguardandoPaciente.value)
 
 // Volta pra aba "Paciente" a cada novo atendimento — se o médico ficou na
@@ -399,7 +398,7 @@ onUnmounted(() => {
                Monta já em "aguardando_paciente" (antes do paciente entrar) para o médico ser o primeiro
                a entrar na sala do Jitsi e virar anfitrião automaticamente. -->
           <div class="flex-1 min-h-0">
-            <UiJitsiMeet
+            <UiDailyMeet
               v-if="!encerrandoModal"
               :room-id="consultaAtiva.id"
               :display-name="authStore.medicoData?.nome ?? 'Médico'"

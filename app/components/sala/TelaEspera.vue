@@ -102,7 +102,7 @@ function handleEntrar() { jitsiAtivo.value = true; emit('entrar') }
         </span>
       </div>
       <div class="flex-1" style="min-height:0">
-        <UiJitsiMeet
+        <UiDailyMeet
           v-if="pacienteAtual"
           :room-id="pacienteAtual.id"
           :display-name="nomePaciente || 'Paciente'"
