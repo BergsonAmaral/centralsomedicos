@@ -83,6 +83,6 @@ onUnmounted(() => {
   <!-- Fundo com a logo enquanto o Jitsi ainda está carregando/conectando -->
   <div
     ref="container"
-    style="width:100%;height:100%;background:#000 url('/logo.png') center/120px no-repeat"
+    style="width:100%;height:100%;background:#fff url('/logo.png') center/120px no-repeat"
   />
 </template>
