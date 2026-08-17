@@ -59,14 +59,6 @@ async function initJitsi() {
     },
   })
 
-  // Aplica a imagem de fundo da SóMedicos na câmera automaticamente, sem
-  // precisar que a pessoa abra o menu e escolha manualmente. Continua
-  // trocável a qualquer momento pelo botão "select-background" na barra.
-  api.addEventListener('videoConferenceJoined', () => {
-    try {
-      api.setVirtualBackground(true, `${window.location.origin}/fundo-videochamada.jpg`)
-    } catch { /* segue sem fundo virtual se o navegador não suportar */ }
-  })
 }
 
 onMounted(() => {
