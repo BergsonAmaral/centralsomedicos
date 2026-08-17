@@ -18,6 +18,7 @@ import {
   ChevronDown,
   Building2,
   UserCog,
+  ShieldCheck,
 } from 'lucide-vue-next'
 import { useAuthStore } from '~/stores/auth'
 
@@ -45,6 +46,7 @@ const navItemsBottom = [
   { label: 'Relatórios', icon: BarChart3, to: '/admin/relatorios' },
   { label: 'Financeiro', icon: DollarSign, to: '/admin/financeiro' },
   { label: 'Logs', icon: Activity, to: '/admin/logs' },
+  { label: 'Equipe', icon: ShieldCheck, to: '/admin/equipe' },
 ]
 
 const isCadastroActive = computed(() => cadastroItems.some(i => isActive(i.to)))

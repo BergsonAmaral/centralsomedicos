@@ -11,6 +11,7 @@ export const useAuthStore = defineStore('auth', () => {
   const loading = ref(false)
 
   const isAdmin = computed(() => profile.value?.role === 'admin')
+  const isSuperAdmin = computed(() => profile.value?.role === 'admin' && !!profile.value?.is_superadmin)
   const isMedico = computed(() => profile.value?.role === 'medico')
   const isAtendente = computed(() => profile.value?.role === 'atendente')
   const medicoId = computed(() => medicoData.value?.id ?? null)
@@ -98,6 +99,7 @@ export const useAuthStore = defineStore('auth', () => {
     atendenteUnidadeId,
     loading,
     isAdmin,
+    isSuperAdmin,
     isMedico,
     isAtendente,
     loadProfile,

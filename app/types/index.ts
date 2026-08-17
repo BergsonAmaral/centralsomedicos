@@ -8,6 +8,7 @@ export interface Profile {
   id: string
   role: Role
   nome: string
+  is_superadmin: boolean
   created_at: string
 }
 
