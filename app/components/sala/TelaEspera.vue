@@ -112,7 +112,7 @@ const iniciais = computed(() =>
 
     <!-- ══ AVALIAÇÃO ════════════════════════════════════════ -->
     <template v-else-if="aguardandoAval">
-      <div class="flex-1 flex flex-col items-center justify-center gap-8 px-8 text-center"
+      <div class="flex-1 flex flex-col items-center justify-center gap-8 px-8 py-4 text-center overflow-y-auto"
         style="background:linear-gradient(160deg,#060f1c,#0d2640)">
         <template v-if="avEnviada">
           <div style="width:7rem;height:7rem;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(45,170,138,0.15);border:3px solid #2daa8a">
@@ -166,7 +166,7 @@ const iniciais = computed(() =>
 
     <!-- ══ OBRIGADO PÓS-CONSULTA ═══════════════════════════ -->
     <template v-else-if="mostraObrigado">
-      <div class="flex-1 flex flex-col items-center justify-center gap-8 px-10 text-center"
+      <div class="flex-1 flex flex-col items-center justify-center gap-8 px-10 py-4 text-center overflow-y-auto"
         style="background:linear-gradient(160deg,#021a0a,#052e10)">
         <div style="width:7rem;height:7rem;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(74,222,128,0.15);border:3px solid rgba(74,222,128,0.5)">
           <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -206,7 +206,7 @@ const iniciais = computed(() =>
 
         <!-- ─── CHAMADO: botão entrar ──────────────────────── -->
         <div v-if="aguardandoEntrar" key="chamado"
-          class="flex-1 flex flex-col items-center justify-center gap-10 px-8 text-center"
+          class="flex-1 flex flex-col items-center justify-center gap-10 px-8 py-4 text-center overflow-y-auto"
           style="background:linear-gradient(160deg,#022c0a,#064d12)">
 
           <div style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem 1.5rem;border-radius:1rem;background:rgba(74,222,128,0.15);border:2px solid rgba(74,222,128,0.4)">
@@ -235,7 +235,7 @@ const iniciais = computed(() =>
 
         <!-- ─── MÉDICO NOTIFICADO ───────────────────────────── -->
         <div v-else-if="aguardandoMedico" key="notificando"
-          class="flex-1 flex flex-col items-center justify-center gap-10 px-8 text-center"
+          class="flex-1 flex flex-col items-center justify-center gap-10 px-8 py-4 text-center overflow-y-auto"
           style="background:linear-gradient(160deg,#1a0f00,#2d1a00)">
 
           <div class="relative">
@@ -266,7 +266,7 @@ const iniciais = computed(() =>
 
         <!-- ─── IDLE: aguardando chamada ───────────────────── -->
         <div v-else key="idle"
-          class="flex-1 flex flex-col items-center justify-center gap-10 px-8 text-center"
+          class="flex-1 flex flex-col items-center justify-center gap-10 px-8 py-4 text-center overflow-y-auto"
           style="background:linear-gradient(160deg,#0a1628,#112240)">
 
           <!-- Ícone relógio -->
@@ -332,5 +332,13 @@ const iniciais = computed(() =>
 @keyframes shine {
   0%   { background-position: 200% center; }
   100% { background-position: -200% center; }
+}
+
+/* Celular deitado / telas baixas: os textos usam clamp() baseado na
+   largura (vw), então numa tela larga mas baixa eles ficam enormes e
+   estouram a altura disponível. Reduz o essencial pra caber. */
+@media (max-height: 500px) {
+  header { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
+  h1 { font-size: clamp(1.8rem, 6vh, 4rem) !important; }
 }
 </style>
