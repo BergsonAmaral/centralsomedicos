@@ -168,6 +168,7 @@ async function desativarMedico() {
 async function excluirMedico() {
   if (!confirm('ATENÇÃO: Excluir o médico permanentemente? Todos os agendamentos e documentos associados serão removidos. Esta ação não pode ser desfeita.')) return
   await supabase.from('documentos').delete().eq('medico_id', id)
+  await supabase.from('consultas').delete().eq('medico_id', id)
   await supabase.from('agendamentos').delete().eq('medico_id', id)
   const { error } = await supabase.from('medicos').delete().eq('id', id)
   if (error) { toast.erro('Erro ao excluir médico: ' + error.message); return }

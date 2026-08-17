@@ -219,11 +219,17 @@ const deletandoPaciente = ref(false)
 async function excluirPaciente() {
   if (!confirm('ATENÇÃO: Todos os agendamentos e documentos do paciente serão excluídos permanentemente. Confirma?')) return
   deletandoPaciente.value = true
-  // Deleta em cascata (documentos → agendamentos → paciente)
+  // Deleta em cascata (documentos → consultas → agendamentos → paciente).
+  // "consultas" precisa vir antes de "agendamentos": desde que o prontuário
+  // passou a ser criado já no início do atendimento (não só ao encerrar),
+  // praticamente todo paciente com histórico tem uma linha em consultas
+  // apontando pra ele — sem apagar isso primeiro, a FK bloqueia a exclusão.
   await supabase.from('documentos').delete().eq('paciente_id', id)
+  await supabase.from('consultas').delete().eq('paciente_id', id)
   await supabase.from('agendamentos').delete().eq('paciente_id', id)
-  await supabase.from('pacientes').delete().eq('id', id)
+  const { error } = await supabase.from('pacientes').delete().eq('id', id)
   deletandoPaciente.value = false
+  if (error) { toast.erro('Erro ao excluir paciente: ' + error.message); return }
   navigateTo('/admin/pacientes')
 }
 
