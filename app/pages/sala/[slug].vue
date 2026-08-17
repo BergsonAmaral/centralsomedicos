@@ -90,12 +90,22 @@ function avisarSaidaSeEmConsulta() {
   }
 }
 
+// Navegadores atrasam (ou pausam) setInterval em abas em segundo plano —
+// se a sala ficar minimizada ou atrás de outra janela por um tempo, o
+// polling de 3s pode não rodar. Ao voltar o foco, força uma busca na hora
+// em vez de esperar o próximo ciclo, para não ficar com o status atrasado.
+function aoVoltarFoco() {
+  if (document.visibilityState === 'visible') buscarPacienteAtivo()
+}
+
 onMounted(() => {
   atualizarHora()
   clockInterval = setInterval(atualizarHora, 1000)
   pollingInterval = setInterval(buscarPacienteAtivo, 3000)
 
   window.addEventListener('pagehide', avisarSaidaSeEmConsulta)
+  document.addEventListener('visibilitychange', aoVoltarFoco)
+  window.addEventListener('focus', aoVoltarFoco)
 
   if (!sala.value) return
 
@@ -132,6 +142,8 @@ onUnmounted(() => {
   clearInterval(clockInterval)
   clearInterval(pollingInterval)
   window.removeEventListener('pagehide', avisarSaidaSeEmConsulta)
+  document.removeEventListener('visibilitychange', aoVoltarFoco)
+  window.removeEventListener('focus', aoVoltarFoco)
   supabase.removeAllChannels()
 })
 
