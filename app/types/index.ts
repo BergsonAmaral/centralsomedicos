@@ -23,6 +23,11 @@ export interface Medico {
   valor_consulta: number | null
   assinatura_url: string | null
   created_at: string
+  // Expediente — usado para calcular horários disponíveis no agendamento público
+  dias_atendimento: number[] // 0=domingo .. 6=sábado, igual Date.getDay()
+  horario_inicio: string     // "08:00:00"
+  horario_fim: string        // "18:00:00"
+  duracao_slot_min: number
 }
 
 export type UnidadeTipo = 'hospital' | 'ubs' | 'itinerante' | 'rural'
@@ -100,13 +105,14 @@ export interface Agendamento {
   data_consulta: string
   motivo: string | null
   observacoes: string | null
-  origem: 'sus' | 'manual'
+  origem: 'sus' | 'manual' | 'publico'
   status: AgendamentoStatus
   checkin_em: string | null
   chamado_em: string | null
   encerrado_em: string | null
   triagem: Triagem | null
   sala_slug: string | null
+  horario: string | null
   created_at: string
   // Relações
   pacientes?: Paciente

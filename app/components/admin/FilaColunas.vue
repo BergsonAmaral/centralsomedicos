@@ -148,7 +148,12 @@ onUnmounted(() => clearInterval(interval))
               <Building2 :size="10" /> {{ ag.pacientes.unidades.nome }}
             </span>
           </div>
-          <p class="text-xs text-[var(--color-text-muted)]">{{ ag.medicos?.nome }}</p>
+          <p class="text-xs text-[var(--color-text-muted)]">
+            {{ ag.medicos?.nome }}<span v-if="ag.horario"> · {{ ag.horario.slice(0, 5) }}</span>
+          </p>
+          <span v-if="ag.origem === 'publico'" class="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full mt-1" style="background:#f3e8ff;color:#7c3aed">
+            Cadastro público
+          </span>
           <p v-if="ag.motivo" class="text-xs text-[var(--color-text-dim)] mt-1 truncate">{{ ag.motivo }}</p>
         </div>
         <div class="space-y-2">
