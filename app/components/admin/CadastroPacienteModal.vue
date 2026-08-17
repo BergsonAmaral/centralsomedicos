@@ -28,6 +28,7 @@ const unidades = ref<{ id: string; nome: string }[]>([])
 const criarAgendamento = ref(false)
 const dataConsulta = ref('')
 const motivo = ref('')
+const observacoesAg = ref('')
 const medicoId = ref('')
 
 const medicos = ref<{ id: string; nome: string; especialidade: string }[]>([])
@@ -147,6 +148,7 @@ async function salvar() {
         medico_id: medicoId.value,
         data_consulta: dataConsulta.value,
         motivo: motivo.value.trim() || null,
+        observacoes: observacoesAg.value.trim() || null,
         origem: 'manual',
         status: 'agendado',
       })
@@ -284,6 +286,10 @@ async function salvar() {
           <div class="sm:col-span-2">
             <label class="text-xs font-medium text-[var(--color-text-muted)] block mb-1">Motivo</label>
             <input v-model="motivo" type="text" class="input-base" placeholder="Ex.: dor de cabeça, retorno..." />
+          </div>
+          <div class="sm:col-span-2">
+            <label class="text-xs font-medium text-[var(--color-text-muted)] block mb-1">Observação</label>
+            <input v-model="observacoesAg" type="text" class="input-base" placeholder="Opcional" />
           </div>
         </div>
       </div>

@@ -23,6 +23,32 @@ const agendadosFiltrados = computed(() => porUnidade(fila.agendados.value))
 const filaAtivaFiltrada = computed(() => porUnidade(fila.filaAtiva.value))
 const finalizadosFiltrados = computed(() => porUnidade(fila.finalizados.value))
 
+// Fila organizada por especialidade — cada coluna agrupa os cards sob um
+// cabeçalho de especialidade, em vez de uma lista só misturada.
+function agruparPorEspecialidade<T extends { medicos?: { especialidade?: string } | null }>(lista: T[]) {
+  const grupos: Record<string, T[]> = {}
+  for (const item of lista) {
+    const esp = item.medicos?.especialidade || 'Sem especialidade'
+    ;(grupos[esp] ??= []).push(item)
+  }
+  return Object.entries(grupos).sort(([a], [b]) => a.localeCompare(b, 'pt-BR'))
+}
+
+const agendadosPorEsp = computed(() => agruparPorEspecialidade(agendadosFiltrados.value))
+const finalizadosPorEsp = computed(() => agruparPorEspecialidade(finalizadosFiltrados.value))
+
+// Fila Ativa mostra a posição global (1º, 2º...) mesmo agrupada — a
+// prioridade de chamada não muda, só a organização visual
+const filaAtivaPorEsp = computed(() => {
+  const comIndice = filaAtivaFiltrada.value.map((ag, indice) => ({ ag, indice }))
+  const grupos: Record<string, { ag: Agendamento; indice: number }[]> = {}
+  for (const item of comIndice) {
+    const esp = item.ag.medicos?.especialidade || 'Sem especialidade'
+    ;(grupos[esp] ??= []).push(item)
+  }
+  return Object.entries(grupos).sort(([a], [b]) => a.localeCompare(b, 'pt-BR'))
+})
+
 // Modais
 const checkinModal = ref<Agendamento | null>(null)
 const chamarModal = ref<Agendamento | null>(null)
@@ -136,47 +162,50 @@ onUnmounted(() => clearInterval(interval))
         Nenhum paciente agendado
       </div>
 
-      <div
-        v-for="ag in agendadosFiltrados"
-        :key="ag.id"
-        class="card p-4 space-y-3"
-      >
-        <div>
-          <div class="flex items-center justify-between gap-2">
-            <p class="font-semibold text-[var(--color-text)]">{{ ag.pacientes?.nome }}</p>
-            <span v-if="ag.pacientes?.unidades?.nome" class="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style="background:#e8eef8;color:#1e4d9a">
-              <Building2 :size="10" /> {{ ag.pacientes.unidades.nome }}
+      <template v-for="[especialidade, lista] in agendadosPorEsp" :key="especialidade">
+        <p class="text-[10px] font-bold uppercase tracking-wider mt-1" style="color:var(--color-text-dim)">{{ especialidade }}</p>
+        <div
+          v-for="ag in lista"
+          :key="ag.id"
+          class="card p-4 space-y-3"
+        >
+          <div>
+            <div class="flex items-center justify-between gap-2">
+              <p class="font-semibold text-[var(--color-text)]">{{ ag.pacientes?.nome }}</p>
+              <span v-if="ag.pacientes?.unidades?.nome" class="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style="background:#e8eef8;color:#1e4d9a">
+                <Building2 :size="10" /> {{ ag.pacientes.unidades.nome }}
+              </span>
+            </div>
+            <p class="text-xs text-[var(--color-text-muted)]">
+              {{ ag.medicos?.nome }}<span v-if="ag.medicos?.especialidade"> · {{ ag.medicos.especialidade }}</span><span v-if="ag.horario"> · {{ ag.horario.slice(0, 5) }}</span>
+            </p>
+            <span v-if="ag.origem === 'publico'" class="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full mt-1" style="background:#f3e8ff;color:#7c3aed">
+              Cadastro público
             </span>
+            <p v-if="ag.motivo" class="text-xs text-[var(--color-text-dim)] mt-1 truncate">{{ ag.motivo }}</p>
           </div>
-          <p class="text-xs text-[var(--color-text-muted)]">
-            {{ ag.medicos?.nome }}<span v-if="ag.horario"> · {{ ag.horario.slice(0, 5) }}</span>
-          </p>
-          <span v-if="ag.origem === 'publico'" class="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full mt-1" style="background:#f3e8ff;color:#7c3aed">
-            Cadastro público
-          </span>
-          <p v-if="ag.motivo" class="text-xs text-[var(--color-text-dim)] mt-1 truncate">{{ ag.motivo }}</p>
-        </div>
-        <div class="space-y-2">
-          <div class="flex gap-2">
-            <UiButton variant="primary" size="sm" class="flex-1" title="Check-in com triagem e sinais vitais" @click="checkinModal = ag">
-              <UserCheck :size="14" /> Check-in
-            </UiButton>
-            <UiButton variant="ghost" size="sm" title="Marcar como falta" @click="confirmarFaltou(ag.id)" :loading="marcandoFaltou === ag.id">
-              <UserX :size="14" />
+          <div class="space-y-2">
+            <div class="flex gap-2">
+              <UiButton variant="primary" size="sm" class="flex-1" title="Check-in com triagem e sinais vitais" @click="checkinModal = ag">
+                <UserCheck :size="14" /> Check-in
+              </UiButton>
+              <UiButton variant="ghost" size="sm" title="Marcar como falta" @click="confirmarFaltou(ag.id)" :loading="marcandoFaltou === ag.id">
+                <UserX :size="14" />
+              </UiButton>
+            </div>
+            <UiButton
+              variant="ghost"
+              size="sm"
+              class="w-full"
+              title="Coloca o paciente direto na fila, pulando a triagem"
+              :loading="entradaDireta === ag.id"
+              @click="fazerEntradaDireta(ag)"
+            >
+              <Zap :size="13" style="color:#f59e0b" /> Entrada rápida (sem triagem)
             </UiButton>
           </div>
-          <UiButton
-            variant="ghost"
-            size="sm"
-            class="w-full"
-            title="Coloca o paciente direto na fila, pulando a triagem"
-            :loading="entradaDireta === ag.id"
-            @click="fazerEntradaDireta(ag)"
-          >
-            <Zap :size="13" style="color:#f59e0b" /> Entrada rápida (sem triagem)
-          </UiButton>
         </div>
-      </div>
+      </template>
     </div>
 
     <!-- ===========================
@@ -192,97 +221,102 @@ onUnmounted(() => clearInterval(interval))
         Nenhum na fila
       </div>
 
-      <div
-        v-for="(ag, index) in filaAtivaFiltrada"
-        :key="ag.id"
-        :class="[
-          'card p-4 space-y-3',
-          index === 0 ? 'border-[var(--color-green)] shadow-[var(--shadow-md)]' : '',
-        ]"
-      >
-        <div class="flex items-start justify-between gap-2">
-          <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-2 mb-0.5">
-              <span class="text-xs font-mono font-bold text-[var(--color-text-muted)]">
-                {{ index + 1 }}º
-              </span>
-              <p class="font-semibold text-[var(--color-text)] truncate">{{ ag.pacientes?.nome }}</p>
-            </div>
-            <p class="text-xs text-[var(--color-text-muted)]">{{ ag.medicos?.nome }}</p>
-            <div class="flex items-center gap-2 mt-1 flex-wrap">
-              <span v-if="ag.pacientes?.unidades?.nome" class="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style="background:#e8eef8;color:#1e4d9a">
-                <Building2 :size="10" /> {{ ag.pacientes.unidades.nome }}
-              </span>
-              <div class="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
-                <Clock :size="11" />
-                {{ horaFormatada(ag.checkin_em) }} · {{ tempoEspera(ag.checkin_em) }} espera
+      <template v-for="[especialidade, lista] in filaAtivaPorEsp" :key="especialidade">
+        <p class="text-[10px] font-bold uppercase tracking-wider mt-1" style="color:var(--color-text-dim)">{{ especialidade }}</p>
+        <div
+          v-for="{ ag, indice } in lista"
+          :key="ag.id"
+          :class="[
+            'card p-4 space-y-3',
+            indice === 0 ? 'border-[var(--color-green)] shadow-[var(--shadow-md)]' : '',
+          ]"
+        >
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2 mb-0.5">
+                <span class="text-xs font-mono font-bold text-[var(--color-text-muted)]">
+                  {{ indice + 1 }}º
+                </span>
+                <p class="font-semibold text-[var(--color-text)] truncate">{{ ag.pacientes?.nome }}</p>
+              </div>
+              <p class="text-xs text-[var(--color-text-muted)]">
+                {{ ag.medicos?.nome }}<span v-if="ag.medicos?.especialidade"> · {{ ag.medicos.especialidade }}</span>
+              </p>
+              <div class="flex items-center gap-2 mt-1 flex-wrap">
+                <span v-if="ag.pacientes?.unidades?.nome" class="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style="background:#e8eef8;color:#1e4d9a">
+                  <Building2 :size="10" /> {{ ag.pacientes.unidades.nome }}
+                </span>
+                <div class="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
+                  <Clock :size="11" />
+                  {{ horaFormatada(ag.checkin_em) }} · {{ tempoEspera(ag.checkin_em) }} espera
+                </div>
               </div>
             </div>
+            <div class="flex flex-col gap-1 shrink-0">
+              <UiBadge v-if="ag.triagem?.urgencia" variant="urgencia" />
+              <UiBadge v-if="ag.triagem?.alergia" variant="alergia" />
+              <UiBadge v-if="ag.triagem?.febre" variant="febre" />
+            </div>
           </div>
-          <div class="flex flex-col gap-1 shrink-0">
-            <UiBadge v-if="ag.triagem?.urgencia" variant="urgencia" />
-            <UiBadge v-if="ag.triagem?.alergia" variant="alergia" />
-            <UiBadge v-if="ag.triagem?.febre" variant="febre" />
-          </div>
-        </div>
 
-        <!-- Ainda na fila: dá para corrigir a triagem antes de encaminhar -->
-        <div v-if="ag.status === 'checkin'" class="flex gap-2">
-          <UiButton
-            variant="success"
-            size="sm"
-            class="flex-1"
-            @click="chamarModal = ag"
-          >
-            <PhoneCall :size="14" /> Encaminhar →
-          </UiButton>
-          <UiButton
-            variant="ghost"
-            size="sm"
-            title="Editar triagem, sinais vitais e sala"
-            @click="checkinModal = ag"
-          >
-            <Pencil :size="13" />
-          </UiButton>
-        </div>
-
-        <!-- Já encaminhado: mostra o status e mantém o controle com o admin -->
-        <div v-else class="space-y-2">
-          <div
-            class="w-full text-center text-xs font-semibold py-2 rounded-lg"
-            :style="ag.status === 'em_consulta'
-              ? 'background:#dcfce7;color:#166534'
-              : 'background:#fef9c3;color:#854d0e'"
-          >
-            {{
-              ag.status === 'aguardando_medico' ? 'Chamando médico…'
-              : ag.status === 'aguardando_paciente' ? 'Aguardando paciente entrar…'
-              : 'Em consulta'
-            }}
-          </div>
-          <div class="flex gap-2">
+          <!-- Ainda na fila: dá para corrigir a triagem antes de encaminhar -->
+          <div v-if="ag.status === 'checkin'" class="flex gap-2">
             <UiButton
-              variant="ghost"
+              variant="success"
               size="sm"
               class="flex-1"
-              title="Desfaz o encaminhamento e devolve o paciente para a fila"
-              :loading="revertendo === ag.id"
-              @click="voltarParaFila(ag)"
+              @click="chamarModal = ag"
             >
-              <Undo2 :size="13" /> Voltar p/ fila
+              <PhoneCall :size="14" /> Encaminhar →
             </UiButton>
             <UiButton
               variant="ghost"
               size="sm"
-              title="Cancelar definitivamente este atendimento"
-              :loading="revertendo === ag.id"
-              @click="cancelarAtendimento(ag)"
+              title="Editar triagem, sinais vitais e sala"
+              @click="checkinModal = ag"
             >
-              <Ban :size="13" style="color:#dc2626" />
+              <Pencil :size="13" />
             </UiButton>
           </div>
+
+          <!-- Já encaminhado: mostra o status e mantém o controle com o admin -->
+          <div v-else class="space-y-2">
+            <div
+              class="w-full text-center text-xs font-semibold py-2 rounded-lg"
+              :style="ag.status === 'em_consulta'
+                ? 'background:#dcfce7;color:#166534'
+                : 'background:#fef9c3;color:#854d0e'"
+            >
+              {{
+                ag.status === 'aguardando_medico' ? 'Chamando médico…'
+                : ag.status === 'aguardando_paciente' ? 'Aguardando paciente entrar…'
+                : 'Em consulta'
+              }}
+            </div>
+            <div class="flex gap-2">
+              <UiButton
+                variant="ghost"
+                size="sm"
+                class="flex-1"
+                title="Desfaz o encaminhamento e devolve o paciente para a fila"
+                :loading="revertendo === ag.id"
+                @click="voltarParaFila(ag)"
+              >
+                <Undo2 :size="13" /> Voltar p/ fila
+              </UiButton>
+              <UiButton
+                variant="ghost"
+                size="sm"
+                title="Cancelar definitivamente este atendimento"
+                :loading="revertendo === ag.id"
+                @click="cancelarAtendimento(ag)"
+              >
+                <Ban :size="13" style="color:#dc2626" />
+              </UiButton>
+            </div>
+          </div>
         </div>
-      </div>
+      </template>
     </div>
 
     <!-- ===========================
@@ -298,31 +332,36 @@ onUnmounted(() => clearInterval(interval))
         Nenhum finalizado
       </div>
 
-      <div
-        v-for="ag in finalizadosFiltrados"
-        :key="ag.id"
-        class="card p-4 space-y-2"
-      >
-        <div class="flex items-start justify-between gap-2">
-          <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-2">
-              <p class="font-medium text-[var(--color-text)] truncate text-sm">{{ ag.pacientes?.nome }}</p>
-              <span v-if="ag.pacientes?.unidades?.nome" class="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style="background:#e8eef8;color:#1e4d9a">
-                <Building2 :size="10" /> {{ ag.pacientes.unidades.nome }}
-              </span>
+      <template v-for="[especialidade, lista] in finalizadosPorEsp" :key="especialidade">
+        <p class="text-[10px] font-bold uppercase tracking-wider mt-1" style="color:var(--color-text-dim)">{{ especialidade }}</p>
+        <div
+          v-for="ag in lista"
+          :key="ag.id"
+          class="card p-4 space-y-2"
+        >
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2">
+                <p class="font-medium text-[var(--color-text)] truncate text-sm">{{ ag.pacientes?.nome }}</p>
+                <span v-if="ag.pacientes?.unidades?.nome" class="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style="background:#e8eef8;color:#1e4d9a">
+                  <Building2 :size="10" /> {{ ag.pacientes.unidades.nome }}
+                </span>
+              </div>
+              <p class="text-xs text-[var(--color-text-muted)]">
+                {{ ag.medicos?.nome }}<span v-if="ag.medicos?.especialidade"> · {{ ag.medicos.especialidade }}</span>
+              </p>
+              <p class="text-xs text-[var(--color-text-dim)] mt-0.5">
+                {{ horaFormatada(ag.chamado_em) }} → {{ horaFormatada(ag.encerrado_em) }}
+                · {{ duracaoConsulta(ag) }}
+              </p>
             </div>
-            <p class="text-xs text-[var(--color-text-muted)]">{{ ag.medicos?.nome }}</p>
-            <p class="text-xs text-[var(--color-text-dim)] mt-0.5">
-              {{ horaFormatada(ag.chamado_em) }} → {{ horaFormatada(ag.encerrado_em) }}
-              · {{ duracaoConsulta(ag) }}
-            </p>
+            <UiBadge :variant="ag.status as any" />
           </div>
-          <UiBadge :variant="ag.status as any" />
+          <UiButton variant="ghost" size="sm" @click="verModal = ag">
+            <Eye :size="13" /> Ver
+          </UiButton>
         </div>
-        <UiButton variant="ghost" size="sm" @click="verModal = ag">
-          <Eye :size="13" /> Ver
-        </UiButton>
-      </div>
+      </template>
     </div>
   </div>
 
@@ -344,7 +383,7 @@ onUnmounted(() => clearInterval(interval))
   <UiModal v-if="verModal" :model-value="true" title="Detalhes da Consulta" size="md" @update:model-value="verModal = null">
     <div class="space-y-3 text-sm">
       <p><strong>Paciente:</strong> {{ verModal.pacientes?.nome }}</p>
-      <p><strong>Médico:</strong> {{ verModal.medicos?.nome }}</p>
+      <p><strong>Médico:</strong> {{ verModal.medicos?.nome }}<span v-if="verModal.medicos?.especialidade"> — {{ verModal.medicos.especialidade }}</span></p>
       <p><strong>Status:</strong> <UiBadge :variant="verModal.status as any" /></p>
       <p><strong>Motivo:</strong> {{ verModal.motivo ?? '—' }}</p>
       <p v-if="verModal.observacoes"><strong>Observações:</strong> {{ verModal.observacoes }}</p>

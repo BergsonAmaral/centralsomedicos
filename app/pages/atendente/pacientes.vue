@@ -70,15 +70,15 @@ const paginasVisiveis = computed(() => {
 const modalCadastro = ref(false)
 
 // Agendamento rápido
-const medicos = ref<{ id: string; nome: string }[]>([])
+const medicos = ref<{ id: string; nome: string; especialidade: string }[]>([])
 const agendandoPaciente = ref<Paciente | null>(null)
-const agForm = ref({ medico_id: '', data_consulta: '', motivo: '' })
+const agForm = ref({ medico_id: '', data_consulta: '', motivo: '', observacoes: '' })
 const salvandoAg = ref(false)
 const erroAg = ref('')
 
 async function abrirAgendar(p: Paciente) {
   if (!medicos.value.length) {
-    const { data } = await supabase.from('medicos').select('id, nome').eq('ativo', true).order('nome')
+    const { data } = await supabase.from('medicos').select('id, nome, especialidade').eq('ativo', true).order('especialidade,nome')
     medicos.value = data ?? []
   }
   const hoje = new Date()
@@ -86,6 +86,7 @@ async function abrirAgendar(p: Paciente) {
     medico_id: medicos.value[0]?.id ?? '',
     data_consulta: `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`,
     motivo: '',
+    observacoes: '',
   }
   erroAg.value = ''
   agendandoPaciente.value = p
@@ -100,6 +101,7 @@ async function confirmarAgendamento() {
     medico_id: agForm.value.medico_id,
     data_consulta: agForm.value.data_consulta,
     motivo: agForm.value.motivo || null,
+    observacoes: agForm.value.observacoes || null,
     origem: 'manual',
     status: 'agendado',
   })
@@ -228,13 +230,17 @@ async function confirmarAgendamento() {
           <label class="text-sm font-medium text-[var(--color-text-muted)] block mb-1">Médico *</label>
           <select v-model="agForm.medico_id" class="input-base">
             <option value="">Selecione</option>
-            <option v-for="m in medicos" :key="m.id" :value="m.id">{{ m.nome }}</option>
+            <option v-for="m in medicos" :key="m.id" :value="m.id">{{ m.nome }} — {{ m.especialidade }}</option>
           </select>
         </div>
         <UiInput v-model="agForm.data_consulta" label="Data *" type="date" />
         <div>
           <label class="text-sm font-medium text-[var(--color-text-muted)] block mb-1">Motivo</label>
           <input v-model="agForm.motivo" type="text" class="input-base" placeholder="Opcional" />
+        </div>
+        <div>
+          <label class="text-sm font-medium text-[var(--color-text-muted)] block mb-1">Observação</label>
+          <input v-model="agForm.observacoes" type="text" class="input-base" placeholder="Opcional" />
         </div>
         <p v-if="erroAg" class="text-xs text-red-600">{{ erroAg }}</p>
       </div>

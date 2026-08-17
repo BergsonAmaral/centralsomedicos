@@ -114,13 +114,21 @@ async function excluir(u: Unidade) {
   // Excluir a unidade apaga junto todas as salas dela (ON DELETE CASCADE).
   // O aviso antigo só falava dos pacientes, então as salas — e os links de
   // acesso já distribuídos — sumiam sem que ninguém fosse avisado.
-  const { count } = await supabase
-    .from('salas')
-    .select('id', { count: 'exact', head: true })
-    .eq('unidade_id', u.id)
+  const [{ count: countSalas }, { count: countAtendentes }] = await Promise.all([
+    supabase.from('salas').select('id', { count: 'exact', head: true }).eq('unidade_id', u.id),
+    supabase.from('atendentes').select('id', { count: 'exact', head: true }).eq('unidade_id', u.id),
+  ])
 
-  const aviso = count
-    ? `Remover a unidade "${u.nome}"?\n\nATENÇÃO: ${count} sala(s) desta unidade também serão excluídas, e os links /sala/... delas deixarão de funcionar.\n\nPacientes vinculados ficam sem unidade.`
+  // atendentes.unidade_id é NOT NULL com ON DELETE RESTRICT — o banco não
+  // deixa apagar a unidade enquanto houver atendente vinculado a ela.
+  // Sem essa checagem, o clique só resultava num erro técnico sem explicação.
+  if (countAtendentes) {
+    toast.erro(`Não é possível remover: ${countAtendentes} atendente(s) ainda vinculado(s) a "${u.nome}". Mude a unidade deles ou desative-os primeiro (Cadastros → Atendentes).`)
+    return
+  }
+
+  const aviso = countSalas
+    ? `Remover a unidade "${u.nome}"?\n\nATENÇÃO: ${countSalas} sala(s) desta unidade também serão excluídas, e os links /sala/... delas deixarão de funcionar.\n\nPacientes vinculados ficam sem unidade.`
     : `Remover a unidade "${u.nome}"? Pacientes vinculados ficam sem unidade.`
 
   if (!confirm(aviso)) return
