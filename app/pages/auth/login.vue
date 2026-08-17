@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Mail, Lock, AlertCircle } from 'lucide-vue-next'
+import { Mail, Lock, AlertCircle, Eye, EyeOff } from 'lucide-vue-next'
 import { useAuthStore } from '~/stores/auth'
 
 definePageMeta({ layout: false })
@@ -11,6 +11,7 @@ const email = ref('')
 const senha = ref('')
 const erro = ref('')
 const carregando = ref(false)
+const senhaVisivel = ref(false)
 
 const user = useSupabaseUser()
 onMounted(async () => {
@@ -112,11 +113,22 @@ async function entrar() {
               <Lock :size="15" class="input-icon" />
               <input
                 v-model="senha"
-                type="password"
+                :type="senhaVisivel ? 'text' : 'password'"
                 placeholder="••••••••"
                 :disabled="carregando"
                 class="input-base"
+                style="padding-right:2.25rem"
               >
+              <button
+                type="button"
+                class="input-icon-right"
+                :title="senhaVisivel ? 'Ocultar senha' : 'Mostrar senha'"
+                tabindex="-1"
+                @click="senhaVisivel = !senhaVisivel"
+              >
+                <EyeOff v-if="senhaVisivel" :size="15" />
+                <Eye v-else :size="15" />
+              </button>
             </div>
           </div>
 
@@ -189,6 +201,22 @@ async function entrar() {
   pointer-events: none;
   z-index: 10;
 }
+
+.input-icon-right {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #a3a199;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.2rem;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+}
+.input-icon-right:hover { color: #0A0C09; }
 
 .input-base {
   width: 100%;
