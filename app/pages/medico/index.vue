@@ -23,7 +23,43 @@ let timerInterval: ReturnType<typeof setInterval> | null = null
 // Abre em "paciente" por padrão — é onde ficam a triagem e os sinais
 // vitais do check-in. Começar em "documentos" escondia essas informações
 // atrás de um clique que o médico não sabia que precisava dar.
-const sidebarTab = ref<'paciente' | 'documentos'>('paciente')
+const sidebarTab = ref<'paciente' | 'prontuario' | 'documentos'>('paciente')
+
+// Prontuário: o médico anota durante a própria consulta (não só no fim).
+// Guardamos num registro em "consultas" criado assim que a consulta começa
+// (não só ao encerrar), salvando a cada pausa de digitação — se a página
+// fechar/travar no meio do atendimento, a anotação não se perde.
+const consultaIdAtual = ref<string | null>(null)
+let salvarRascunhoTimer: ReturnType<typeof setTimeout> | null = null
+
+async function garantirConsulta(agendamentoId: string, pacienteId: string, medicoId: string) {
+  const { data: existente } = await supabase
+    .from('consultas')
+    .select('id, evolucao')
+    .eq('agendamento_id', agendamentoId)
+    .maybeSingle()
+  if (existente) {
+    consultaIdAtual.value = existente.id
+    evolucao.value = existente.evolucao ?? ''
+    return
+  }
+  const { data: nova } = await supabase
+    .from('consultas')
+    .insert({ agendamento_id: agendamentoId, paciente_id: pacienteId, medico_id: medicoId })
+    .select('id')
+    .single()
+  consultaIdAtual.value = nova?.id ?? null
+  evolucao.value = ''
+}
+
+watch(evolucao, () => {
+  if (!consultaIdAtual.value) return
+  if (salvarRascunhoTimer) clearTimeout(salvarRascunhoTimer)
+  const consultaId = consultaIdAtual.value
+  salvarRascunhoTimer = setTimeout(() => {
+    supabase.from('consultas').update({ evolucao: evolucao.value || null }).eq('id', consultaId)
+  }, 1200)
+})
 
 const emConsulta = computed(() => {
   const ag = filaStore.filaAtiva.find((a) => a.status === 'em_consulta')
@@ -52,7 +88,14 @@ const consultaAtiva = computed(() => emConsulta.value ?? aguardandoPaciente.valu
 // aba Documentos na consulta anterior, a próxima já abria escondendo a
 // triagem de novo.
 watch(() => consultaAtiva.value?.id, (novoId, antigoId) => {
-  if (novoId && novoId !== antigoId) sidebarTab.value = 'paciente'
+  if (novoId && novoId !== antigoId) {
+    sidebarTab.value = 'paciente'
+    const ag = consultaAtiva.value
+    if (ag) {
+      const pacienteId = (ag.pacientes as any)?.id
+      if (pacienteId) garantirConsulta(ag.id, pacienteId, ag.medico_id)
+    }
+  }
 })
 
 const proximosFila = computed(() =>
@@ -153,22 +196,28 @@ async function encerrarConsulta() {
     if (errEncerrar) throw new Error((errEncerrar as any).message)
 
     const evolucaoCapturada = evolucao.value || null
+    if (salvarRascunhoTimer) clearTimeout(salvarRascunhoTimer)
+    const consultaId = consultaIdAtual.value
     pararTimer()
     encerrandoModal.value = false
     evolucao.value = ''
+    consultaIdAtual.value = null
 
-    // 2. Salva a consulta em background (não bloqueia o fluxo)
-    supabase
-      .from('consultas')
-      .insert({
-        agendamento_id: agendamentoId,
-        paciente_id: pacienteId,
-        medico_id: medicoIdAtual,
-        evolucao: evolucaoCapturada,
-        duracao_minutos: duracaoMin,
-      })
-      .select('id')
-      .single()
+    // 2. Salva a consulta em background (não bloqueia o fluxo) — reaproveita
+    // o registro já criado no início do atendimento (onde o prontuário foi
+    // sendo salvo), só completando duração agora. Só insere do zero se por
+    // algum motivo esse registro não existir (ex: consulta antiga).
+    const finalizarConsulta = consultaId
+      ? supabase.from('consultas').update({ evolucao: evolucaoCapturada, duracao_minutos: duracaoMin }).eq('id', consultaId).select('id').single()
+      : supabase.from('consultas').insert({
+          agendamento_id: agendamentoId,
+          paciente_id: pacienteId,
+          medico_id: medicoIdAtual,
+          evolucao: evolucaoCapturada,
+          duracao_minutos: duracaoMin,
+        }).select('id').single()
+
+    finalizarConsulta
       .then(({ data: consulta }) => {
         if (consulta?.id) {
           // Vincula documentos à consulta
@@ -402,6 +451,16 @@ onUnmounted(() => {
             <button
               type="button"
               class="flex-1 py-2 rounded-t-lg text-sm font-semibold transition-colors"
+              :style="sidebarTab === 'prontuario'
+                ? 'background:white;color:#0f172a'
+                : 'background:#0f172a;color:#94a3b8'"
+              @click="sidebarTab = 'prontuario'"
+            >
+              Prontuário
+            </button>
+            <button
+              type="button"
+              class="flex-1 py-2 rounded-t-lg text-sm font-semibold transition-colors"
               :style="sidebarTab === 'documentos'
                 ? 'background:white;color:#0f172a'
                 : 'background:#0f172a;color:#94a3b8'"
@@ -414,6 +473,19 @@ onUnmounted(() => {
           <!-- Conteúdo rolável -->
           <div class="flex-1 overflow-y-auto p-4" style="background:white">
             <MedicoPacienteAtual v-if="sidebarTab === 'paciente'" :agendamento="consultaAtiva" />
+            <div v-if="sidebarTab === 'prontuario'" class="h-full flex flex-col">
+              <p class="text-xs font-semibold uppercase tracking-wide mb-2" style="color:#64748b">
+                Anotações da consulta
+              </p>
+              <textarea
+                v-model="evolucao"
+                rows="14"
+                placeholder="Vá anotando aqui durante o atendimento: queixas, exame físico, hipóteses, conduta..."
+                class="w-full flex-1 px-3 py-2.5 rounded-xl border text-sm resize-none"
+                style="border-color:#e2e8f0"
+              />
+              <p class="text-[11px] mt-1.5" style="color:#94a3b8">Salva automaticamente enquanto você digita.</p>
+            </div>
             <MedicoDocumentoForm
               v-if="sidebarTab === 'documentos' && authStore.medicoData && authStore.medicoId"
               :agendamento="consultaAtiva"
