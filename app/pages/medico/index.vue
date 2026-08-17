@@ -20,7 +20,10 @@ let timerInterval: ReturnType<typeof setInterval> | null = null
 // Painel lateral durante a consulta: alterna entre dados do paciente e
 // documentos sem precisar rolar a tela — o médico troca com 1 clique,
 // sem sair da chamada.
-const sidebarTab = ref<'paciente' | 'documentos'>('documentos')
+// Abre em "paciente" por padrão — é onde ficam a triagem e os sinais
+// vitais do check-in. Começar em "documentos" escondia essas informações
+// atrás de um clique que o médico não sabia que precisava dar.
+const sidebarTab = ref<'paciente' | 'documentos'>('paciente')
 
 const emConsulta = computed(() => {
   const ag = filaStore.filaAtiva.find((a) => a.status === 'em_consulta')
@@ -44,6 +47,13 @@ const aguardandoPaciente = computed(() =>
 // ficava com os controles de anfitrião. Agora o médico entra assim que
 // aceita (aguardando_paciente), garantindo que chegue primeiro.
 const consultaAtiva = computed(() => emConsulta.value ?? aguardandoPaciente.value)
+
+// Volta pra aba "Paciente" a cada novo atendimento — se o médico ficou na
+// aba Documentos na consulta anterior, a próxima já abria escondendo a
+// triagem de novo.
+watch(() => consultaAtiva.value?.id, (novoId, antigoId) => {
+  if (novoId && novoId !== antigoId) sidebarTab.value = 'paciente'
+})
 
 const proximosFila = computed(() =>
   filaStore.filaAtiva.filter((a) => a.status === 'checkin')
