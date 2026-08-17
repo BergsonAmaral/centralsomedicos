@@ -30,9 +30,12 @@ const sidebarTab = ref<'paciente' | 'prontuario' | 'documentos'>('paciente')
 // (não só ao encerrar), salvando a cada pausa de digitação — se a página
 // fechar/travar no meio do atendimento, a anotação não se perde.
 const consultaIdAtual = ref<string | null>(null)
+const salvandoProntuario = ref(false)
+const prontuarioSalvoEm = ref<Date | null>(null)
 let salvarRascunhoTimer: ReturnType<typeof setTimeout> | null = null
 
 async function garantirConsulta(agendamentoId: string, pacienteId: string, medicoId: string) {
+  prontuarioSalvoEm.value = null
   const { data: existente } = await supabase
     .from('consultas')
     .select('id, evolucao')
@@ -41,6 +44,7 @@ async function garantirConsulta(agendamentoId: string, pacienteId: string, medic
   if (existente) {
     consultaIdAtual.value = existente.id
     evolucao.value = existente.evolucao ?? ''
+    if (existente.evolucao) prontuarioSalvoEm.value = new Date()
     return
   }
   const { data: nova } = await supabase
@@ -52,12 +56,22 @@ async function garantirConsulta(agendamentoId: string, pacienteId: string, medic
   evolucao.value = ''
 }
 
+async function salvarProntuarioAgora() {
+  if (!consultaIdAtual.value) return
+  if (salvarRascunhoTimer) clearTimeout(salvarRascunhoTimer)
+  salvandoProntuario.value = true
+  await supabase.from('consultas').update({ evolucao: evolucao.value || null }).eq('id', consultaIdAtual.value)
+  salvandoProntuario.value = false
+  prontuarioSalvoEm.value = new Date()
+}
+
 watch(evolucao, () => {
   if (!consultaIdAtual.value) return
   if (salvarRascunhoTimer) clearTimeout(salvarRascunhoTimer)
   const consultaId = consultaIdAtual.value
   salvarRascunhoTimer = setTimeout(() => {
     supabase.from('consultas').update({ evolucao: evolucao.value || null }).eq('id', consultaId)
+      .then(() => { prontuarioSalvoEm.value = new Date() })
   }, 1200)
 })
 
@@ -474,9 +488,21 @@ onUnmounted(() => {
           <div class="flex-1 overflow-y-auto p-4" style="background:white">
             <MedicoPacienteAtual v-if="sidebarTab === 'paciente'" :agendamento="consultaAtiva" />
             <div v-if="sidebarTab === 'prontuario'" class="h-full flex flex-col">
-              <p class="text-xs font-semibold uppercase tracking-wide mb-2" style="color:#64748b">
-                Anotações da consulta
-              </p>
+              <div class="flex items-center justify-between mb-2">
+                <p class="text-xs font-semibold uppercase tracking-wide" style="color:#64748b">
+                  Anotações da consulta
+                </p>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold disabled:opacity-50"
+                  style="background:#16a34a;color:white"
+                  :disabled="salvandoProntuario || !consultaIdAtual"
+                  @click="salvarProntuarioAgora"
+                >
+                  <Check :size="13" />
+                  {{ salvandoProntuario ? 'Salvando…' : 'Salvar no prontuário' }}
+                </button>
+              </div>
               <textarea
                 v-model="evolucao"
                 rows="14"
@@ -484,7 +510,11 @@ onUnmounted(() => {
                 class="w-full flex-1 px-3 py-2.5 rounded-xl border text-sm resize-none"
                 style="border-color:#e2e8f0"
               />
-              <p class="text-[11px] mt-1.5" style="color:#94a3b8">Salva automaticamente enquanto você digita.</p>
+              <p class="text-[11px] mt-1.5" style="color:#94a3b8">
+                {{ prontuarioSalvoEm
+                  ? `Salvo às ${prontuarioSalvoEm.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} — visível pra você e pro admin no histórico do paciente.`
+                  : 'Salva automaticamente enquanto você digita, ou clique em "Salvar no prontuário" agora.' }}
+              </p>
             </div>
             <MedicoDocumentoForm
               v-if="sidebarTab === 'documentos' && authStore.medicoData && authStore.medicoId"
