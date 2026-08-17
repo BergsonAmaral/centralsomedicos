@@ -101,11 +101,18 @@ export interface SinaisVitais {
   imc?: number | null                 // kg/m²
 }
 
+export interface AnexoTriagem {
+  tipo: 'link' | 'arquivo'
+  label: string
+  url: string
+}
+
 export interface Triagem extends SinaisVitais {
   alergia: boolean
   febre: boolean
   urgencia: boolean
   obs: string
+  anexos?: AnexoTriagem[]
 }
 
 export interface Agendamento {

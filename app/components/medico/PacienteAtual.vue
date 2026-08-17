@@ -128,6 +128,13 @@ const alertas = computed(() => {
   if (triagem.value.febre)    arr.push({ label: 'Febre',    bg: '#fefce8', cor: '#a16207' })
   return arr
 })
+
+const anexos = computed(() => triagem.value.anexos ?? [])
+
+async function abrirAnexo(url: string) {
+  const resolvida = await resolverUrlAssinada(url)
+  if (resolvida) window.open(resolvida, '_blank', 'noopener')
+}
 </script>
 
 <template>
@@ -192,6 +199,23 @@ const alertas = computed(() => {
       >
         <p class="font-semibold uppercase tracking-wide text-[10px] mb-0.5">Obs. da triagem</p>
         {{ triagem.observacoes ?? triagem.obs }}
+      </div>
+    </div>
+
+    <!-- Documentos / Exames anexados no check-in -->
+    <div v-if="anexos.length">
+      <p class="text-[10px] uppercase tracking-wider font-semibold mb-1.5" style="color:#94a3b8">Documentos / Exames</p>
+      <div class="space-y-1.5">
+        <button
+          v-for="(a, i) in anexos" :key="i"
+          type="button"
+          class="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg border text-xs text-left hover:bg-[#f8fafc]"
+          style="border-color:#e2e8f0"
+          @click="abrirAnexo(a.url)"
+        >
+          <FileText :size="13" style="color:#64748b" class="shrink-0" />
+          <span class="truncate flex-1" style="color:#1d4ed8">{{ a.label }}</span>
+        </button>
       </div>
     </div>
 

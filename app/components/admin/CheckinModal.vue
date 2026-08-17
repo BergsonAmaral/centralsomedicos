@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { UserCheck, X, Heart, Thermometer, Activity, Weight, Bluetooth, BluetoothConnected, BluetoothOff, Loader2, Droplets, Scale } from 'lucide-vue-next'
-import type { Agendamento } from '~/types'
+import { UserCheck, X, Heart, Thermometer, Activity, Weight, Bluetooth, BluetoothConnected, BluetoothOff, Loader2, Droplets, Scale, Paperclip, Link2, Upload, Trash2, ExternalLink } from 'lucide-vue-next'
+import type { Agendamento, AnexoTriagem } from '~/types'
 import { useFila } from '~/composables/useFila'
 import { useDispositivosBT, type TipoDispositivo } from '~/composables/useDispositivosBT'
+import { useDocumentos } from '~/composables/useDocumentos'
 
 interface Props {
   agendamento: Agendamento
@@ -15,6 +16,7 @@ const supabase = useSupabaseClient()
 const fila = useFila()
 const toast = useToast()
 const carregando = ref(false)
+const { resolverUrlAssinada } = useDocumentos()
 
 const bt = useDispositivosBT()
 const maletaAberta = ref(false)
@@ -64,6 +66,55 @@ const triagem = ref({
   gordura_percentual: (triagemSalva.gordura_percentual ?? null) as number | null,
   imc: (triagemSalva.imc ?? null) as number | null,
 })
+
+// Documentos/exames anexados no check-in — link externo (ex: PDF no Drive,
+// resultado online) ou arquivo enviado direto (guardado no bucket privado
+// "documentos", igual aos documentos gerados pelo médico).
+const anexos = ref<AnexoTriagem[]>((triagemSalva.anexos ?? []) as AnexoTriagem[])
+const novoLinkLabel = ref('')
+const novoLinkUrl = ref('')
+const enviandoArquivo = ref(false)
+const erroAnexo = ref('')
+
+function adicionarLink() {
+  erroAnexo.value = ''
+  if (!novoLinkUrl.value.trim()) { erroAnexo.value = 'Cole um link.'; return }
+  if (!/^https?:\/\//i.test(novoLinkUrl.value.trim())) { erroAnexo.value = 'O link precisa começar com http:// ou https://'; return }
+  anexos.value.push({
+    tipo: 'link',
+    label: novoLinkLabel.value.trim() || 'Link',
+    url: novoLinkUrl.value.trim(),
+  })
+  novoLinkLabel.value = ''
+  novoLinkUrl.value = ''
+}
+
+async function enviarArquivo(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  erroAnexo.value = ''
+  enviandoArquivo.value = true
+  try {
+    const path = `checkin-anexos/${props.agendamento.id}/${Date.now()}_${file.name}`
+    const { error } = await supabase.storage.from('documentos').upload(path, file, { upsert: false })
+    if (error) throw new Error(error.message)
+    anexos.value.push({ tipo: 'arquivo', label: file.name, url: path })
+  } catch (err: any) {
+    erroAnexo.value = err?.message ?? 'Erro ao enviar arquivo.'
+  } finally {
+    enviandoArquivo.value = false
+    ;(e.target as HTMLInputElement).value = ''
+  }
+}
+
+function removerAnexo(i: number) {
+  anexos.value.splice(i, 1)
+}
+
+async function abrirAnexo(a: AnexoTriagem) {
+  const url = await resolverUrlAssinada(a.url)
+  if (url) window.open(url, '_blank', 'noopener')
+}
 
 interface MedicoOpcao { id: string; nome: string; especialidade: string; pausado: boolean }
 interface SalaOpcao { id: string; slug: string; nome: string }
@@ -155,7 +206,11 @@ async function confirmar() {
 
     // Faz/atualiza o check-in com triagem, já registrando em qual sala da
     // unidade o paciente está fisicamente
-    const { error: errCheckin } = await fila.fazerCheckin(props.agendamento.id, triagem.value, salaSelecionadaSlug.value)
+    const { error: errCheckin } = await fila.fazerCheckin(
+      props.agendamento.id,
+      { ...triagem.value, anexos: anexos.value },
+      salaSelecionadaSlug.value
+    )
     if (errCheckin) throw new Error(errCheckin.message)
 
     if (modoEdicao.value) {
@@ -493,6 +548,45 @@ async function confirmar() {
               />
             </div>
           </div>
+        </div>
+
+        <!-- Documentos / Exames -->
+        <div class="mt-4">
+          <p class="text-sm font-semibold text-[var(--color-text)] mb-3 flex items-center gap-2">
+            <Paperclip :size="15" class="text-[var(--color-blue)]" />
+            Documentos / Exames
+          </p>
+
+          <div v-if="anexos.length" class="space-y-1.5 mb-3">
+            <div
+              v-for="(a, i) in anexos" :key="i"
+              class="flex items-center gap-2 px-3 py-2 rounded-lg border text-sm"
+              style="border-color:#e2e8f0;background:#f8fafc"
+            >
+              <component :is="a.tipo === 'link' ? Link2 : Paperclip" :size="14" style="color:#64748b" class="shrink-0" />
+              <button type="button" class="truncate text-left flex-1 hover:underline" style="color:#1d4ed8" @click="abrirAnexo(a)">
+                {{ a.label }}
+              </button>
+              <ExternalLink :size="12" style="color:#94a3b8" class="shrink-0" />
+              <button type="button" class="shrink-0" @click="removerAnexo(i)">
+                <Trash2 :size="13" style="color:#dc2626" />
+              </button>
+            </div>
+          </div>
+
+          <div class="flex flex-col sm:flex-row gap-2">
+            <input v-model="novoLinkLabel" type="text" placeholder="Nome (ex: Exame de sangue)" class="input-base text-sm flex-1" />
+            <input v-model="novoLinkUrl" type="text" placeholder="https://..." class="input-base text-sm flex-1" />
+            <UiButton type="button" variant="ghost" size="sm" @click="adicionarLink">
+              <Link2 :size="13" /> Link
+            </UiButton>
+          </div>
+          <label class="mt-2 inline-flex items-center gap-1.5 text-xs font-medium cursor-pointer" style="color:#475569">
+            <Upload :size="13" />
+            {{ enviandoArquivo ? 'Enviando…' : 'Ou enviar um arquivo (PDF/imagem)' }}
+            <input type="file" accept="application/pdf,image/*" class="hidden" :disabled="enviandoArquivo" @change="enviarArquivo" />
+          </label>
+          <p v-if="erroAnexo" class="mt-1.5 text-xs font-medium" style="color:#dc2626">{{ erroAnexo }}</p>
         </div>
 
         <div class="mt-3">
