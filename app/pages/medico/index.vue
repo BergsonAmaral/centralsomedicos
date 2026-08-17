@@ -326,6 +326,9 @@ onUnmounted(() => {
                 {{ emConsulta ? 'Em consulta' : 'Aguardando paciente entrar' }}
               </p>
               <p class="text-white text-sm font-semibold truncate">{{ (consultaAtiva.pacientes as any)?.nome }}</p>
+              <p v-if="(consultaAtiva.pacientes as any)?.unidades?.nome || consultaAtiva.sala_slug" class="text-[11px] truncate" style="color:#86efac">
+                {{ (consultaAtiva.pacientes as any)?.unidades?.nome }}<span v-if="(consultaAtiva.pacientes as any)?.unidades?.nome && consultaAtiva.sala_slug"> · </span>{{ consultaAtiva.sala_slug }}
+              </p>
             </div>
             <span class="font-mono font-bold text-sm hidden lg:block" style="color:#4ade80">{{ formatarTimer(timerSeg) }}</span>
           </div>

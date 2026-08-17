@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Phone, Mail, IdCard, Calendar, AlertTriangle, History, ChevronDown, Activity, FileText } from 'lucide-vue-next'
+import { Phone, Mail, IdCard, Calendar, AlertTriangle, History, ChevronDown, Activity, FileText, Building2, DoorOpen } from 'lucide-vue-next'
 import type { Agendamento, Consulta, Documento } from '~/types'
 
 const props = defineProps<{ agendamento: Agendamento }>()
@@ -139,6 +139,14 @@ const alertas = computed(() => {
         <h2 class="text-base font-bold text-[var(--color-text)] leading-tight">{{ paciente?.nome }}</h2>
         <p class="text-xs text-[var(--color-text-muted)] mt-0.5">
           {{ calcularIdade(paciente?.data_nascimento) ?? '—' }} anos
+        </p>
+        <p v-if="paciente?.unidades?.nome || agendamento.sala_slug" class="flex items-center gap-1 text-xs mt-0.5" style="color:#64748b">
+          <Building2 :size="11" class="shrink-0" />
+          <span class="truncate">{{ paciente?.unidades?.nome }}</span>
+          <template v-if="agendamento.sala_slug">
+            <DoorOpen :size="11" class="shrink-0" />
+            <span class="truncate">{{ agendamento.sala_slug }}</span>
+          </template>
         </p>
       </div>
     </div>
