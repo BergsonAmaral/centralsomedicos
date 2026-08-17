@@ -97,28 +97,49 @@ export const useDocumentos = () => {
       },
     ]
 
+    const emitidoEm = new Date().toLocaleString('pt-BR')
+
     const docDef = {
+      // Papel timbrado: logo + nome da clínica no topo e rodapé com
+      // paginação em TODAS as páginas do documento, não só na primeira.
+      pageMargins: [40, 90, 40, 60] as [number, number, number, number],
+      header: {
+        margin: [40, 24, 40, 0],
+        stack: [
+          {
+            columns: [
+              ...(logoBase64 ? [{ image: logoBase64, width: 90 } as unknown] : []),
+              {
+                width: '*',
+                stack: [
+                  { text: 'Central SóMedicos', style: 'clinica', alignment: 'right' },
+                  { text: 'Teleconsultas · Uma nova visão da saúde', style: 'clinicaSub', alignment: 'right' },
+                ],
+              },
+            ],
+          },
+          {
+            canvas: [{ type: 'line', x1: 0, y1: 8, x2: 515, y2: 8, lineWidth: 1.2, lineColor: '#2563eb' }],
+          },
+        ],
+      },
+      footer: (currentPage: number, pageCount: number) => ({
+        margin: [40, 8, 40, 0],
+        stack: [
+          { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 0.5, lineColor: '#94a3b8' }] },
+          {
+            columns: [
+              { text: 'Central SóMedicos', style: 'rodape', alignment: 'left' },
+              { text: `Emitido em ${emitidoEm}`, style: 'rodape', alignment: 'center' },
+              { text: `Página ${currentPage} de ${pageCount}`, style: 'rodape', alignment: 'right' },
+            ],
+          },
+        ],
+      }),
       content: [
-        ...(logoBase64
-          ? [{ image: logoBase64, width: 120, margin: [0, 0, 0, 6] } as unknown]
-          : []),
-        { text: 'Central SóMedicos', style: 'clinica' },
         {
           text: `Dr(a). ${medico.nome} | CRM: ${medico.crm} | ${medico.especialidade}`,
           style: 'medico',
-        },
-        {
-          canvas: [
-            {
-              type: 'line',
-              x1: 0,
-              y1: 0,
-              x2: 515,
-              y2: 0,
-              lineWidth: 1,
-              lineColor: '#2563eb',
-            },
-          ],
         },
         '\n',
         { text: `Paciente: ${paciente.nome}`, bold: true },
@@ -133,34 +154,15 @@ export const useDocumentos = () => {
         '\n',
         ...(corpo as unknown[]),
         ...blocoAssinatura,
-        '\n',
-        {
-          canvas: [
-            {
-              type: 'line',
-              x1: 0,
-              y1: 0,
-              x2: 515,
-              y2: 0,
-              lineWidth: 0.5,
-              lineColor: '#94a3b8',
-            },
-          ],
-        },
-        {
-          text: `Emitido em ${new Date().toLocaleString('pt-BR')}`,
-          style: 'rodape',
-        },
       ],
       styles: {
-        clinica: { fontSize: 18, bold: true, color: '#2563eb', margin: [0, 0, 0, 4] },
+        clinica: { fontSize: 16, bold: true, color: '#2563eb', margin: [0, 0, 0, 2] },
+        clinicaSub: { fontSize: 8, color: '#94a3b8' },
         medico: { fontSize: 11, color: '#475569', margin: [0, 0, 0, 10] },
         titulo: { fontSize: 14, bold: true, decoration: 'underline', margin: [0, 0, 0, 8] },
         rodape: {
-          fontSize: 9,
+          fontSize: 8,
           color: '#94a3b8',
-          alignment: 'center',
-          margin: [0, 4, 0, 0],
         },
       },
       defaultStyle: { fontSize: 11, lineHeight: 1.4 },
