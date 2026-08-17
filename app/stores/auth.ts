@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import type { Profile, Medico } from '~/types'
+import type { Profile, Medico, Atendente } from '~/types'
 
 export const useAuthStore = defineStore('auth', () => {
   const supabase = useSupabaseClient()
@@ -7,11 +7,14 @@ export const useAuthStore = defineStore('auth', () => {
 
   const profile = ref<Profile | null>(null)
   const medicoData = ref<Medico | null>(null)
+  const atendenteData = ref<Atendente | null>(null)
   const loading = ref(false)
 
   const isAdmin = computed(() => profile.value?.role === 'admin')
   const isMedico = computed(() => profile.value?.role === 'medico')
+  const isAtendente = computed(() => profile.value?.role === 'atendente')
   const medicoId = computed(() => medicoData.value?.id ?? null)
+  const atendenteUnidadeId = computed(() => atendenteData.value?.unidade_id ?? null)
 
   // Evita múltiplas chamadas simultâneas ao banco
   let _loadingPromise: Promise<void> | null = null
@@ -22,6 +25,7 @@ export const useAuthStore = defineStore('auth', () => {
     if (!authUser) {
       profile.value = null
       medicoData.value = null
+      atendenteData.value = null
       return
     }
 
@@ -49,8 +53,18 @@ export const useAuthStore = defineStore('auth', () => {
             .eq('user_id', authUser.id)
             .single()
           medicoData.value = med
+          atendenteData.value = null
+        } else if (data?.role === 'atendente') {
+          const { data: atd } = await supabase
+            .from('atendentes')
+            .select('*, unidades(id, nome)')
+            .eq('user_id', authUser.id)
+            .single()
+          atendenteData.value = atd
+          medicoData.value = null
         } else {
           medicoData.value = null
+          atendenteData.value = null
         }
       } finally {
         loading.value = false
@@ -65,6 +79,7 @@ export const useAuthStore = defineStore('auth', () => {
     await supabase.auth.signOut()
     profile.value = null
     medicoData.value = null
+    atendenteData.value = null
   }
 
   // Recarrega sempre que o usuário autenticado mudar (login, logout ou troca de conta)
@@ -79,9 +94,12 @@ export const useAuthStore = defineStore('auth', () => {
     profile,
     medicoData,
     medicoId,
+    atendenteData,
+    atendenteUnidadeId,
     loading,
     isAdmin,
     isMedico,
+    isAtendente,
     loadProfile,
     logout,
   }

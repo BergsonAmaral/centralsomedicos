@@ -2,13 +2,23 @@
 // TIPOS GLOBAIS — SoMedicos
 // =============================================
 
-export type Role = 'admin' | 'medico'
+export type Role = 'admin' | 'medico' | 'atendente'
 
 export interface Profile {
   id: string
   role: Role
   nome: string
   created_at: string
+}
+
+export interface Atendente {
+  id: string
+  user_id: string | null
+  nome: string
+  unidade_id: string
+  ativo: boolean
+  created_at: string
+  unidades?: Pick<Unidade, 'id' | 'nome'>
 }
 
 export interface Medico {

@@ -24,4 +24,8 @@ export default defineNuxtRouteMiddleware(async (to) => {
   if (to.path.startsWith('/medico') && !authStore.isMedico) {
     return navigateTo('/auth/login')
   }
+
+  if (to.path.startsWith('/atendente') && !authStore.isAtendente) {
+    return navigateTo('/auth/login')
+  }
 })

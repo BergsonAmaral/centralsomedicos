@@ -22,6 +22,7 @@ onMounted(async () => {
     // deixando o grid quebrado até um refresh manual.
     if (authStore.isAdmin) window.location.href = '/admin'
     else if (authStore.isMedico) window.location.href = '/medico'
+    else if (authStore.isAtendente) window.location.href = '/atendente'
   }
 })
 
@@ -52,6 +53,8 @@ async function entrar() {
       window.location.href = '/admin'
     } else if (authStore.isMedico) {
       window.location.href = '/medico'
+    } else if (authStore.isAtendente) {
+      window.location.href = '/atendente'
     } else {
       erro.value = 'Acesso não autorizado.'
     }
