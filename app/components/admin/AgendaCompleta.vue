@@ -222,10 +222,14 @@ const PRESETS = [
                 <span v-if="(ag.pacientes as any)?.unidades?.nome" class="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style="background:#e8eef8;color:#1e4d9a">
                   <Building2 :size="10" /> {{ (ag.pacientes as any).unidades.nome }}
                 </span>
+                <span v-if="ag.origem === 'publico'" class="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style="background:#f3e8ff;color:#7c3aed">
+                  Cadastro público
+                </span>
               </div>
               <p class="text-xs text-[var(--color-text-muted)] mt-0.5">
                 {{ (ag.medicos as any)?.nome }}
                 <span v-if="(ag.medicos as any)?.especialidade"> · {{ (ag.medicos as any).especialidade }}</span>
+                <span v-if="ag.horario"> · {{ ag.horario.slice(0, 5) }}</span>
               </p>
               <p v-if="ag.motivo" class="text-xs text-[var(--color-text-dim)] mt-0.5 truncate">{{ ag.motivo }}</p>
             </div>
@@ -260,6 +264,8 @@ const PRESETS = [
         <p><strong>Data:</strong> {{ new Date(verModal.data_consulta + 'T12:00:00').toLocaleDateString('pt-BR') }}</p>
         <p><strong>Status:</strong> <UiBadge :variant="verModal.status as any" /></p>
         <p><strong>Motivo:</strong> {{ verModal.motivo ?? '—' }}</p>
+        <p v-if="verModal.observacoes"><strong>Observações:</strong> {{ verModal.observacoes }}</p>
+        <p v-if="verModal.horario"><strong>Horário marcado:</strong> {{ verModal.horario.slice(0, 5) }}</p>
         <p v-if="verModal.checkin_em"><strong>Check-in:</strong> {{ horaFmt(verModal.checkin_em) }}</p>
         <p v-if="verModal.chamado_em"><strong>Chamado em:</strong> {{ horaFmt(verModal.chamado_em) }}</p>
         <p v-if="verModal.encerrado_em"><strong>Encerrado em:</strong> {{ horaFmt(verModal.encerrado_em) }}</p>

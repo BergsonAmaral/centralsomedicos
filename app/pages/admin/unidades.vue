@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Building2, Plus, Pencil, Trash2, Users2 } from 'lucide-vue-next'
+import { Building2, Plus, Pencil, Trash2, Users2, Link, ExternalLink } from 'lucide-vue-next'
 
 definePageMeta({ layout: 'admin', middleware: ['auth', 'role'] })
 
@@ -99,6 +99,16 @@ async function salvar() {
   }
 }
 
+function linkAgendamento(unidadeId: string) {
+  return `${window.location.origin}/agendar/${unidadeId}`
+}
+const copiado = ref<string | null>(null)
+function copiarLink(unidadeId: string) {
+  navigator.clipboard.writeText(linkAgendamento(unidadeId))
+  copiado.value = unidadeId
+  setTimeout(() => { copiado.value = null }, 2000)
+}
+
 const excluindo = ref<string | null>(null)
 async function excluir(u: Unidade) {
   // Excluir a unidade apaga junto todas as salas dela (ON DELETE CASCADE).
@@ -174,6 +184,23 @@ async function excluir(u: Unidade) {
         <div class="flex items-center gap-1.5 text-xs text-[var(--color-text-muted)]">
           <Users2 :size="13" />
           {{ pacientesPorUnidade[u.id] ?? 0 }} paciente(s)
+        </div>
+
+        <!-- Link do totem de agendamento — a tela fixa da recepção aponta aqui -->
+        <div class="rounded-xl p-2.5 flex items-center gap-2" style="background:var(--color-surface-2);border:1px solid var(--color-border-light)">
+          <code class="text-xs text-[var(--color-text-muted)] flex-1 truncate">/agendar/{{ u.id }}</code>
+          <button
+            type="button"
+            class="p-1.5 rounded-lg transition-colors hover:bg-green-100 shrink-0"
+            :title="copiado === u.id ? 'Copiado!' : 'Copiar link do totem'"
+            @click="copiarLink(u.id)"
+          >
+            <span v-if="copiado === u.id" class="text-xs font-bold" style="color:#2daa8a">✓</span>
+            <Link v-else :size="13" style="color:#2daa8a" />
+          </button>
+          <a :href="linkAgendamento(u.id)" target="_blank" class="p-1.5 rounded-lg transition-colors hover:bg-blue-50 shrink-0" title="Abrir">
+            <ExternalLink :size="13" style="color:#2563eb" />
+          </a>
         </div>
 
         <div class="flex gap-2 pt-2 mt-auto" style="border-top:1px solid var(--color-border-light)">

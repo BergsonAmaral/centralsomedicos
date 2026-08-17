@@ -347,6 +347,7 @@ onUnmounted(() => clearInterval(interval))
       <p><strong>Médico:</strong> {{ verModal.medicos?.nome }}</p>
       <p><strong>Status:</strong> <UiBadge :variant="verModal.status as any" /></p>
       <p><strong>Motivo:</strong> {{ verModal.motivo ?? '—' }}</p>
+      <p v-if="verModal.observacoes"><strong>Observações:</strong> {{ verModal.observacoes }}</p>
       <p v-if="verModal.triagem?.obs"><strong>Observações triagem:</strong> {{ verModal.triagem.obs }}</p>
       <div class="grid grid-cols-2 gap-3 mt-2">
         <div class="p-2 rounded bg-[var(--color-surface-2)]">

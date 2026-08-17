@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { Building2, Stethoscope, CalendarDays, Clock, User, ChevronLeft, ChevronRight, Check, AlertCircle } from 'lucide-vue-next'
+import { Building2, Stethoscope, CalendarDays, Clock, User, ChevronLeft, Check, AlertCircle } from 'lucide-vue-next'
 import type { Unidade, Medico } from '~/types'
 
 definePageMeta({ layout: false })
 
+const route = useRoute()
+const unidadeId = route.params.unidadeId as string
 const supabase = useSupabaseClient()
 
 const DIAS_SEMANA = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado']
@@ -21,13 +23,14 @@ function formatarTelefone(v: string): string {
   return d.replace(/(\d{2})(\d{0,5})(\d{0,4})/, '($1) $2-$3').replace(/-$/, '')
 }
 
-// ── Passo 1: unidade ──────────────────────────────────────────
-const passo = ref(1)
-const unidades = ref<Unidade[]>([])
-const unidadeSelecionada = ref<Unidade | null>(null)
-const carregandoUnidades = ref(true)
+// Cada totem já é cadastrado com o link da própria unidade — o paciente
+// não precisa escolher onde está, o /agendar/<unidadeId> já diz isso.
+const unidade = ref<Unidade | null>(null)
+const unidadeNaoEncontrada = ref(false)
+const carregandoUnidade = ref(true)
 
-// ── Passo 2: médico ───────────────────────────────────────────
+// ── Passo 1: médico ───────────────────────────────────────────
+const passo = ref(1)
 const medicos = ref<Medico[]>([])
 const medicoSelecionado = ref<Medico | null>(null)
 const carregandoMedicos = ref(true)
@@ -38,7 +41,7 @@ const medicosPorEspecialidade = computed(() => {
   return grupos
 })
 
-// ── Passo 3: dia ───────────────────────────────────────────────
+// ── Passo 2: dia ───────────────────────────────────────────────
 function dataLocal(offsetDias: number): { iso: string; date: Date } {
   const d = new Date()
   d.setDate(d.getDate() + offsetDias)
@@ -66,7 +69,7 @@ const diasDisponiveis = computed(() => {
 })
 const diaSelecionado = ref<string>('')
 
-// ── Passo 4: horário ─────────────────────────────────────────
+// ── Passo 3: horário ─────────────────────────────────────────
 const horariosOcupados = ref<Set<string>>(new Set())
 const carregandoHorarios = ref(false)
 const horarioSelecionado = ref<string>('')
@@ -111,7 +114,7 @@ const horariosDisponiveis = computed(() => {
   return lista
 })
 
-// ── Passo 5: dados do paciente ──────────────────────────────
+// ── Passo 4: dados do paciente ──────────────────────────────
 const nome = ref('')
 const cpf = ref('')
 const dataNascimento = ref('')
@@ -145,7 +148,7 @@ async function confirmarAgendamento() {
       method: 'POST',
       body: {
         medicoId: medicoSelecionado.value?.id,
-        unidadeId: unidadeSelecionada.value?.id,
+        unidadeId,
         data: diaSelecionado.value,
         horario: horarioSelecionado.value,
         nome: nome.value,
@@ -162,7 +165,7 @@ async function confirmarAgendamento() {
     erroEnvio.value = msg
     // Horário ocupado por outra pessoa nesse meio tempo — volta pro passo de horário
     if (e?.statusCode === 409 || e?.status === 409) {
-      passo.value = 4
+      passo.value = 3
       carregarOcupados()
     }
   } finally {
@@ -172,15 +175,15 @@ async function confirmarAgendamento() {
 
 // ── Navegação entre passos ──────────────────────────────────
 function irPara(p: number) { passo.value = p }
-function escolherUnidade(u: Unidade) { unidadeSelecionada.value = u; passo.value = 2 }
-function escolherMedico(m: Medico) { medicoSelecionado.value = m; diaSelecionado.value = ''; horarioSelecionado.value = ''; passo.value = 3 }
-function escolherDia(iso: string) { diaSelecionado.value = iso; passo.value = 4 }
-function escolherHorario(h: string) { horarioSelecionado.value = h; passo.value = 5 }
+function escolherMedico(m: Medico) { medicoSelecionado.value = m; diaSelecionado.value = ''; horarioSelecionado.value = ''; passo.value = 2 }
+function escolherDia(iso: string) { diaSelecionado.value = iso; passo.value = 3 }
+function escolherHorario(h: string) { horarioSelecionado.value = h; passo.value = 4 }
 
 onMounted(async () => {
-  const { data: uData } = await supabase.from('unidades').select('*').eq('ativo', true).order('nome')
-  unidades.value = uData ?? []
-  carregandoUnidades.value = false
+  const { data: uData } = await supabase.from('unidades').select('*').eq('id', unidadeId).eq('ativo', true).maybeSingle()
+  if (!uData) { unidadeNaoEncontrada.value = true; carregandoUnidade.value = false; return }
+  unidade.value = uData as Unidade
+  carregandoUnidade.value = false
 
   const { data: mData } = await supabase.from('medicos').select('*').eq('ativo', true).order('especialidade,nome')
   medicos.value = (mData ?? []) as Medico[]
@@ -189,7 +192,6 @@ onMounted(async () => {
 
 function reiniciar() {
   concluido.value = false
-  unidadeSelecionada.value = null
   medicoSelecionado.value = null
   diaSelecionado.value = ''
   horarioSelecionado.value = ''
@@ -205,10 +207,19 @@ function reiniciar() {
       <div class="flex flex-col items-center mb-8">
         <img src="/logo.png" alt="Central SóMedicos" style="height:80px" class="object-contain" />
         <p class="text-sm mt-2" style="color:#767670">Marque sua consulta online</p>
+        <p v-if="unidade" class="text-xs mt-1 font-semibold" style="color:#2daa8a">{{ unidade.nome }}</p>
+      </div>
+
+      <div v-if="carregandoUnidade" class="ag-card py-10 text-center text-sm" style="color:#767670">Carregando…</div>
+
+      <div v-else-if="unidadeNaoEncontrada" class="ag-card py-10 px-6 text-center">
+        <AlertCircle :size="28" class="mx-auto mb-3" style="color:#dc2626" />
+        <p class="font-semibold" style="color:#0A0C09">Unidade não encontrada</p>
+        <p class="text-sm mt-1" style="color:#767670">Fale com a recepção do local.</p>
       </div>
 
       <!-- Sucesso -->
-      <div v-if="concluido" class="ag-card text-center py-10 px-6">
+      <div v-else-if="concluido" class="ag-card text-center py-10 px-6">
         <div class="w-16 h-16 rounded-full mx-auto flex items-center justify-center mb-4" style="background:#dcfce7">
           <Check :size="30" style="color:#16a34a" />
         </div>
@@ -220,7 +231,7 @@ function reiniciar() {
         <div class="ag-info-box text-left text-sm mb-6">
           <div class="flex items-center gap-2 mb-1.5">
             <Building2 :size="15" style="color:#2daa8a" />
-            <span><strong>Onde:</strong> {{ unidadeSelecionada?.nome }}<span v-if="unidadeSelecionada?.cidade"> — {{ unidadeSelecionada.cidade }}</span></span>
+            <span><strong>Onde:</strong> {{ unidade?.nome }}<span v-if="unidade?.cidade"> — {{ unidade.cidade }}</span></span>
           </div>
           <p style="color:#767670">Chegue com um pouco de antecedência e leve um documento com foto.</p>
         </div>
@@ -231,33 +242,14 @@ function reiniciar() {
       <div v-else class="ag-card">
         <!-- Indicador de passos -->
         <div class="flex items-center gap-1.5 px-6 pt-5">
-          <div v-for="p in 5" :key="p" class="h-1.5 flex-1 rounded-full" :style="p <= passo ? 'background:#2daa8a' : 'background:#e5e3dc'" />
+          <div v-for="p in 4" :key="p" class="h-1.5 flex-1 rounded-full" :style="p <= passo ? 'background:#2daa8a' : 'background:#e5e3dc'" />
         </div>
 
         <div class="p-6">
-          <!-- Passo 1: Unidade -->
+          <!-- Passo 1: Médico -->
           <template v-if="passo === 1">
-            <h2 class="ag-title"><Building2 :size="18" /> Escolha a unidade</h2>
-            <p class="ag-subtitle">Onde você vai comparecer no dia da consulta.</p>
-            <div v-if="carregandoUnidades" class="py-8 text-center text-sm" style="color:#767670">Carregando…</div>
-            <div v-else-if="!unidades.length" class="py-8 text-center text-sm" style="color:#767670">Nenhuma unidade disponível no momento.</div>
-            <div v-else class="space-y-2">
-              <button
-                v-for="u in unidades" :key="u.id" type="button"
-                class="ag-option"
-                @click="escolherUnidade(u)"
-              >
-                <span class="font-semibold" style="color:#0A0C09">{{ u.nome }}</span>
-                <span v-if="u.cidade" class="text-xs block mt-0.5" style="color:#767670">{{ u.cidade }}</span>
-              </button>
-            </div>
-          </template>
-
-          <!-- Passo 2: Médico -->
-          <template v-else-if="passo === 2">
-            <button type="button" class="ag-voltar" @click="irPara(1)"><ChevronLeft :size="16" /> Voltar</button>
             <h2 class="ag-title"><Stethoscope :size="18" /> Escolha o especialista</h2>
-            <p class="ag-subtitle">Unidade: <strong>{{ unidadeSelecionada?.nome }}</strong></p>
+            <p class="ag-subtitle">Consulta na unidade <strong>{{ unidade?.nome }}</strong></p>
             <div v-if="carregandoMedicos" class="py-8 text-center text-sm" style="color:#767670">Carregando…</div>
             <div v-else-if="!medicos.length" class="py-8 text-center text-sm" style="color:#767670">Nenhum médico disponível no momento.</div>
             <div v-else class="space-y-4">
@@ -276,9 +268,9 @@ function reiniciar() {
             </div>
           </template>
 
-          <!-- Passo 3: Dia -->
-          <template v-else-if="passo === 3">
-            <button type="button" class="ag-voltar" @click="irPara(2)"><ChevronLeft :size="16" /> Voltar</button>
+          <!-- Passo 2: Dia -->
+          <template v-else-if="passo === 2">
+            <button type="button" class="ag-voltar" @click="irPara(1)"><ChevronLeft :size="16" /> Voltar</button>
             <h2 class="ag-title"><CalendarDays :size="18" /> Escolha o dia</h2>
             <p class="ag-subtitle">{{ medicoSelecionado?.nome }} — {{ medicoSelecionado?.especialidade }}</p>
             <div v-if="!diasDisponiveis.length" class="py-8 text-center text-sm" style="color:#767670">
@@ -296,9 +288,9 @@ function reiniciar() {
             </div>
           </template>
 
-          <!-- Passo 4: Horário -->
-          <template v-else-if="passo === 4">
-            <button type="button" class="ag-voltar" @click="irPara(3)"><ChevronLeft :size="16" /> Voltar</button>
+          <!-- Passo 3: Horário -->
+          <template v-else-if="passo === 3">
+            <button type="button" class="ag-voltar" @click="irPara(2)"><ChevronLeft :size="16" /> Voltar</button>
             <h2 class="ag-title"><Clock :size="18" /> Escolha o horário</h2>
             <p class="ag-subtitle">{{ diaSelecionado.split('-').reverse().join('/') }}</p>
             <div v-if="carregandoHorarios" class="py-8 text-center text-sm" style="color:#767670">Carregando…</div>
@@ -316,9 +308,9 @@ function reiniciar() {
             </div>
           </template>
 
-          <!-- Passo 5: Dados do paciente -->
-          <template v-else-if="passo === 5">
-            <button type="button" class="ag-voltar" @click="irPara(4)"><ChevronLeft :size="16" /> Voltar</button>
+          <!-- Passo 4: Dados do paciente -->
+          <template v-else-if="passo === 4">
+            <button type="button" class="ag-voltar" @click="irPara(3)"><ChevronLeft :size="16" /> Voltar</button>
             <h2 class="ag-title"><User :size="18" /> Seus dados</h2>
             <p class="ag-subtitle">
               {{ medicoSelecionado?.nome }} · {{ diaSelecionado.split('-').reverse().join('/') }} às {{ horarioSelecionado }}
