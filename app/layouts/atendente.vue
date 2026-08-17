@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ClipboardList, Users2, History, LogOut, Menu, X } from 'lucide-vue-next'
+import { ClipboardList, Users2, History, FileText, LogOut, Menu, X } from 'lucide-vue-next'
 import { useAuthStore } from '~/stores/auth'
 
 const authStore = useAuthStore()
@@ -9,6 +9,7 @@ const sidebarOpen = ref(false)
 const navItems = [
   { label: 'Fila de Espera', icon: ClipboardList, to: '/atendente' },
   { label: 'Pacientes', icon: Users2, to: '/atendente/pacientes' },
+  { label: 'Documentos', icon: FileText, to: '/atendente/documentos' },
   { label: 'Histórico', icon: History, to: '/atendente/historico' },
 ]
 

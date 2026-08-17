@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { FileText, Eye, Send, Archive, FileDown, Search, Filter, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-vue-next'
+import { FileText, Eye, Send, Archive, FileDown, Search, Filter, ChevronLeft, ChevronRight, CalendarDays, Trash2 } from 'lucide-vue-next'
 import type { Documento } from '~/types'
 
 definePageMeta({ layout: 'admin', middleware: ['auth', 'role'] })
 
 const supabase = useSupabaseClient()
+const toast = useToast()
 const { resolverUrlAssinada } = useDocumentos()
 const documentos = ref<Documento[]>([])
 const carregando = ref(true)
@@ -182,6 +183,27 @@ const periodoAtivo = computed(() => {
 async function arquivar(id: string) {
   await supabase.from('documentos').update({ status: 'arquivado' }).eq('id', id)
   await carregar()
+}
+
+const excluindo = ref<string | null>(null)
+async function excluir(doc: Documento) {
+  if (!confirm(`Excluir este ${TIPOS_LABELS[doc.tipo] ?? 'documento'} de "${(doc.pacientes as any)?.nome ?? 'paciente'}"? Essa ação não pode ser desfeita.`)) return
+  excluindo.value = doc.id
+  try {
+    // pdf_url é um path no storage privado (nunca um link externo tipo Memed
+    // aqui — esses não têm arquivo pra apagar, só o registro)
+    if (doc.pdf_url && !/^https?:\/\//i.test(doc.pdf_url)) {
+      await supabase.storage.from('documentos').remove([doc.pdf_url])
+    }
+    const { error } = await supabase.from('documentos').delete().eq('id', doc.id)
+    if (error) throw new Error(error.message)
+    toast.sucesso('Documento excluído.')
+    await Promise.all([carregar(), carregarFunil()])
+  } catch (e: any) {
+    toast.erro('Erro ao excluir: ' + (e?.message ?? 'tente novamente'))
+  } finally {
+    excluindo.value = null
+  }
 }
 
 // Envio
@@ -512,6 +534,15 @@ const paginasVisiveis = computed(() => {
                     @click="arquivar(doc.id)"
                   >
                     <Archive :size="14" />
+                  </button>
+                  <button
+                    class="p-1.5 rounded-lg transition-colors disabled:opacity-40"
+                    style="background:#fef2f2;color:#dc2626"
+                    title="Excluir permanentemente"
+                    :disabled="excluindo === doc.id"
+                    @click="excluir(doc)"
+                  >
+                    <Trash2 :size="14" />
                   </button>
                 </div>
               </td>
