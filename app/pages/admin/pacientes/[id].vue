@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ArrowLeft, Plus, Search, Pencil, X as XIcon, Trash2, AlertTriangle } from 'lucide-vue-next'
-import type { Paciente, Agendamento, Documento, AgendamentoStatus } from '~/types'
+import type { Paciente, Agendamento, Documento, AgendamentoStatus, Consulta } from '~/types'
 
 definePageMeta({ layout: 'admin', middleware: ['auth', 'role'] })
 
@@ -21,6 +21,12 @@ const voltar = () => navigateTo('/admin/pacientes')
 const paciente = ref<Paciente | null>(null)
 const agendamentos = ref<Agendamento[]>([])
 const documentos = ref<Documento[]>([])
+const consultas = ref<Consulta[]>([])
+const consultaPorAgendamento = computed(() => {
+  const mapa: Record<string, Consulta> = {}
+  for (const c of consultas.value) if ((c as any).agendamento_id) mapa[(c as any).agendamento_id] = c
+  return mapa
+})
 const carregando = ref(true)
 const salvando = ref(false)
 const novoAgendamentoModal = ref(false)
@@ -32,7 +38,7 @@ const filtroPeriodo = ref<'todos' | 'futuros' | 'passados' | 'mes'>('todos')
 const buscaMotivo = ref('')
 
 onMounted(async () => {
-  const [pacRes, agRes, docRes, uRes] = await Promise.all([
+  const [pacRes, agRes, docRes, uRes, consRes] = await Promise.all([
     supabase.from('pacientes').select('*').eq('id', id).single(),
     supabase
       .from('agendamentos')
@@ -45,11 +51,15 @@ onMounted(async () => {
       .eq('paciente_id', id)
       .order('created_at', { ascending: false }),
     supabase.from('unidades').select('id, nome').eq('ativo', true).order('nome'),
+    // Prontuário — evolução clínica de todos os médicos que já atenderam,
+    // independente de quem estiver de plantão hoje.
+    supabase.from('consultas').select('*').eq('paciente_id', id).order('created_at', { ascending: false }),
   ])
   paciente.value = pacRes.data
   agendamentos.value = (agRes.data ?? []) as Agendamento[]
   documentos.value = docRes.data ?? []
   unidades.value = uRes.data ?? []
+  consultas.value = (consRes.data ?? []) as Consulta[]
   carregando.value = false
 })
 
@@ -352,6 +362,10 @@ const TIPOS_LABELS: Record<string, string> = {
                 </span>
               </p>
               <p v-if="ag.motivo" class="text-xs text-[var(--color-text-dim)] mt-0.5">{{ ag.motivo }}</p>
+              <div v-if="consultaPorAgendamento[ag.id]?.evolucao" class="mt-1.5 p-2 rounded-lg text-xs" style="background:#f0f9ff;border:1px solid #bae6fd;color:#075985">
+                <p class="font-semibold uppercase tracking-wide text-[10px] mb-0.5">Prontuário</p>
+                {{ consultaPorAgendamento[ag.id]?.evolucao }}
+              </div>
             </div>
             <div class="flex items-center gap-1 shrink-0 ml-2">
               <button
