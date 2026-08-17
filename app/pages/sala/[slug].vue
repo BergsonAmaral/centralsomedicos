@@ -174,6 +174,7 @@ async function entrarConsulta() {
     <SalaTelaEspera
       v-else-if="sala"
       :unidade-nome="unidadeNome"
+      :sala-nome="sala?.nome ?? ''"
       :sala-slug="slug"
       :paciente-atual="pacienteAtual"
       :hora-atual="horaAtual"

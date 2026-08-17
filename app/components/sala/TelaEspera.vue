@@ -4,6 +4,7 @@ import type { Agendamento } from '~/types'
 
 const props = defineProps<{
   unidadeNome: string
+  salaNome: string
   salaSlug: string
   pacienteAtual: Agendamento | null
   horaAtual: string
@@ -78,11 +79,6 @@ watch(() => props.pacienteAtual?.status, (novo, antigo) => {
 onUnmounted(() => { if (obrigadoTimer) clearTimeout(obrigadoTimer) })
 
 function handleEntrar() { jitsiAtivo.value = true; emit('entrar') }
-
-// Iniciais da unidade para avatar (a sala é da unidade, não do médico)
-const iniciais = computed(() =>
-  props.unidadeNome.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase()
-)
 </script>
 
 <template>
@@ -92,11 +88,15 @@ const iniciais = computed(() =>
     <template v-if="emConsulta || jitsiAtivo">
       <div class="shrink-0 flex items-center gap-4 px-6 py-3"
         style="background:#021a0a;border-bottom:2px solid #16a34a">
+        <img src="/logo.png" alt="SóMedicos" style="height:1.75rem;width:auto;flex-shrink:0" />
         <span class="w-3 h-3 rounded-full shrink-0"
           style="background:#4ade80;box-shadow:0 0 10px #4ade80;animation:blink 1.4s ease-in-out infinite" />
-        <p style="color:#ffffff;font-size:1.1rem;font-weight:600;flex:1">
-          Consulta com <strong>Dr(a). {{ nomeMedicoAtual }}</strong>
-        </p>
+        <div style="flex:1;min-width:0">
+          <p style="color:#ffffff;font-size:1.1rem;font-weight:600">
+            Consulta com <strong>Dr(a). {{ nomeMedicoAtual }}</strong>
+          </p>
+          <p style="color:#86efac;font-size:0.8rem">{{ unidadeNome }} · {{ salaNome }}</p>
+        </div>
         <span style="background:#14532d;color:#86efac;font-size:0.8rem;font-weight:700;padding:4px 12px;border-radius:999px">
           AO VIVO
         </span>
@@ -185,13 +185,13 @@ const iniciais = computed(() =>
       <header class="shrink-0 flex items-center justify-between px-8 py-5"
         style="background:rgba(255,255,255,0.05);border-bottom:1px solid rgba(255,255,255,0.1)">
         <div style="display:flex;align-items:center;gap:1rem">
-          <!-- Avatar -->
-          <div style="width:3.5rem;height:3.5rem;border-radius:50%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1d4ed8,#7c3aed);color:#ffffff;font-weight:700;font-size:1.2rem;flex-shrink:0">
-            {{ iniciais }}
+          <!-- Logo -->
+          <div style="width:3.5rem;height:3.5rem;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#ffffff;flex-shrink:0;overflow:hidden">
+            <img src="/logo.png" alt="SóMedicos" style="width:80%;height:80%;object-fit:contain" />
           </div>
           <div>
             <p style="color:#ffffff;font-weight:700;font-size:1.3rem;line-height:1.2">{{ unidadeNome }}</p>
-            <p style="color:#93c5fd;font-size:1rem;font-weight:500">Sala de Teleconsulta</p>
+            <p style="color:#93c5fd;font-size:1rem;font-weight:500">{{ salaNome }}</p>
           </div>
         </div>
         <!-- Relógio -->
@@ -306,7 +306,7 @@ const iniciais = computed(() =>
       <footer class="shrink-0 py-3 text-center"
         style="border-top:1px solid rgba(255,255,255,0.07)">
         <p style="color:rgba(255,255,255,0.3);font-size:0.8rem">
-          SóMedicos · Teleconsulta · /sala/{{ salaSlug }}
+          SóMedicos · Teleconsulta · {{ unidadeNome }} · {{ salaNome }}
         </p>
       </footer>
     </template>
