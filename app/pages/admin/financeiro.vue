@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {
   DollarSign, TrendingUp, Users, BarChart3,
-  CalendarDays, ChevronLeft, ChevronRight, Filter,
+  CalendarDays, ChevronLeft, ChevronRight, Filter, Clock,
 } from 'lucide-vue-next'
 
 definePageMeta({ layout: 'admin', middleware: ['auth', 'role'] })
@@ -15,6 +15,11 @@ function inicioMes() {
 }
 function fmtBRL(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+function fmtHoras(min: number) {
+  const h = Math.floor(min / 60)
+  const m = Math.round(min % 60)
+  return m ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`
 }
 function gerarPaginas(atual: number, total: number): (number | '...')[] {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
@@ -30,7 +35,7 @@ function gerarPaginas(atual: number, total: number): (number | '...')[] {
 const dataIni = ref(inicioMes())
 const dataFim = ref(hoje())
 const medicoFiltro = ref('')
-const medicos = ref<{ id: string; nome: string; especialidade: string; valor_consulta: number | null }[]>([])
+const medicos = ref<{ id: string; nome: string; especialidade: string; valor_consulta: number | null; valor_hora: number | null }[]>([])
 
 // Dados
 const carregando = ref(false)
@@ -40,7 +45,9 @@ interface RowMedico {
   nome: string
   especialidade: string
   valorConsulta: number
+  valorHora: number | null
   consultas: number
+  minutosTrabalhados: number
   receitaTotal: number
   ticketMedio: number
 }
@@ -63,15 +70,16 @@ const ticketMedioGeral = computed(() =>
 const medicoTopReceita = computed(() =>
   [...linhas.value].sort((a, b) => b.receitaTotal - a.receitaTotal)[0] ?? null
 )
+const totalMinutos = computed(() => linhas.value.reduce((s, r) => s + r.minutosTrabalhados, 0))
 
 async function carregar() {
   carregando.value = true
   paginaDetalhe.value = 1
 
-  // Buscar todos os médicos com valor_consulta
+  // Buscar todos os médicos com valor_consulta / valor_hora
   const { data: meds } = await supabase
     .from('medicos')
-    .select('id, nome, especialidade, valor_consulta')
+    .select('id, nome, especialidade, valor_consulta, valor_hora')
     .eq('ativo', true)
     .order('nome')
   medicos.value = (meds ?? []) as typeof medicos.value
@@ -87,11 +95,13 @@ async function carregar() {
 
   const { data: consultas } = await q
 
-  // Agrupar por médico
+  // Agrupar por médico — quantidade de consultas e minutos trabalhados
   const porMedico: Record<string, number> = {}
+  const minutosPorMedico: Record<string, number> = {}
   ;(consultas ?? []).forEach((c: any) => {
     if (!c.medico_id) return
     porMedico[c.medico_id] = (porMedico[c.medico_id] ?? 0) + 1
+    minutosPorMedico[c.medico_id] = (minutosPorMedico[c.medico_id] ?? 0) + (c.duracao_minutos ?? 0)
   })
 
   const medicosAlvo = medicoFiltro.value
@@ -101,15 +111,23 @@ async function carregar() {
   linhas.value = medicosAlvo
     .map(m => {
       const qtd = porMedico[m.id] ?? 0
+      const minutos = minutosPorMedico[m.id] ?? 0
       const valor = m.valor_consulta ?? 0
+      // Médico com valor/hora definido é pago pelas horas trabalhadas;
+      // senão, o padrão continua sendo por consulta.
+      const receita = m.valor_hora
+        ? (minutos / 60) * m.valor_hora
+        : qtd * valor
       return {
         id: m.id,
         nome: m.nome,
         especialidade: m.especialidade,
         valorConsulta: valor,
+        valorHora: m.valor_hora,
         consultas: qtd,
-        receitaTotal: qtd * valor,
-        ticketMedio: qtd ? valor : 0,
+        minutosTrabalhados: minutos,
+        receitaTotal: receita,
+        ticketMedio: qtd ? receita / qtd : 0,
       }
     })
     .sort((a, b) => b.receitaTotal - a.receitaTotal)
@@ -133,16 +151,22 @@ async function carregarAtendimentos() {
   const { data, count } = await q
   totalDetalhe.value = count ?? 0
 
-  const mapa: Record<string, number> = {}
-  medicos.value.forEach(m => { mapa[m.id] = m.valor_consulta ?? 0 })
+  const mapa: Record<string, { valorConsulta: number; valorHora: number | null }> = {}
+  medicos.value.forEach(m => { mapa[m.id] = { valorConsulta: m.valor_consulta ?? 0, valorHora: m.valor_hora } })
 
-  atendimentos.value = (data ?? []).map((c: any) => ({
-    data: c.created_at,
-    paciente: c.pacientes?.nome ?? '—',
-    medico: c.medicos?.nome ?? '—',
-    duracao: c.duracao_minutos,
-    valor: mapa[c.medico_id] ?? 0,
-  }))
+  atendimentos.value = (data ?? []).map((c: any) => {
+    const info = mapa[c.medico_id]
+    const valor = info?.valorHora
+      ? (info.valorHora / 60) * (c.duracao_minutos ?? 0)
+      : info?.valorConsulta ?? 0
+    return {
+      data: c.created_at,
+      paciente: c.pacientes?.nome ?? '—',
+      medico: c.medicos?.nome ?? '—',
+      duracao: c.duracao_minutos,
+      valor,
+    }
+  })
 }
 
 watch([dataIni, dataFim, medicoFiltro], () => carregar())
@@ -159,8 +183,8 @@ function setPeriodo(p: 'hoje' | '7d' | '30d' | 'mes') {
 
 function exportarCSV() {
   const linhasCSV = [
-    ['Médico', 'Especialidade', 'Valor/Consulta', 'Consultas', 'Receita Total'],
-    ...linhas.value.map(r => [r.nome, r.especialidade, r.valorConsulta, r.consultas, r.receitaTotal]),
+    ['Médico', 'Especialidade', 'Valor/Consulta', 'Valor/Hora', 'Consultas', 'Horas Trabalhadas', 'Receita Total'],
+    ...linhas.value.map(r => [r.nome, r.especialidade, r.valorConsulta, r.valorHora ?? '', r.consultas, (r.minutosTrabalhados / 60).toFixed(2), r.receitaTotal]),
   ]
   const csv = linhasCSV.map(l => l.join(',')).join('\n')
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -230,7 +254,7 @@ function exportarCSV() {
 
     <template v-else>
       <!-- KPI Cards -->
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <div class="bg-white rounded-2xl border p-4" style="border-color:var(--color-border)">
           <div class="flex items-center gap-2 mb-2">
             <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:#dbeafe">
@@ -263,6 +287,16 @@ function exportarCSV() {
 
         <div class="bg-white rounded-2xl border p-4" style="border-color:var(--color-border)">
           <div class="flex items-center gap-2 mb-2">
+            <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:#e0f2fe">
+              <Clock :size="16" style="color:#0284c7" />
+            </div>
+            <p class="text-xs font-semibold" style="color:var(--color-text-muted)">Horas Trabalhadas</p>
+          </div>
+          <p class="text-2xl font-bold text-[var(--color-text)]">{{ fmtHoras(totalMinutos) }}</p>
+        </div>
+
+        <div class="bg-white rounded-2xl border p-4" style="border-color:var(--color-border)">
+          <div class="flex items-center gap-2 mb-2">
             <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:#ede9fe">
               <Users :size="16" style="color:#7c3aed" />
             </div>
@@ -291,8 +325,9 @@ function exportarCSV() {
             <tr style="background:var(--color-surface-2);border-bottom:1px solid var(--color-border-light)">
               <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide" style="color:var(--color-text-muted)">Médico</th>
               <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide hidden sm:table-cell" style="color:var(--color-text-muted)">Especialidade</th>
-              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide hidden md:table-cell" style="color:var(--color-text-muted)">Valor/Consulta</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide hidden md:table-cell" style="color:var(--color-text-muted)">Valor/Consulta ou Hora</th>
               <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide" style="color:var(--color-text-muted)">Consultas</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide hidden sm:table-cell" style="color:var(--color-text-muted)">Horas</th>
               <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide" style="color:var(--color-text-muted)">Receita Total</th>
               <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide hidden lg:table-cell" style="color:var(--color-text-muted)">% do total</th>
             </tr>
@@ -311,13 +346,17 @@ function exportarCSV() {
               </td>
               <td class="px-4 py-3 hidden sm:table-cell text-sm" style="color:var(--color-text-muted)">{{ r.especialidade }}</td>
               <td class="px-4 py-3 hidden md:table-cell">
-                <span v-if="r.valorConsulta" class="text-sm font-semibold" style="color:#16a34a">{{ fmtBRL(r.valorConsulta) }}</span>
+                <span v-if="r.valorHora" class="text-sm font-semibold" style="color:#0284c7">{{ fmtBRL(r.valorHora) }}/h</span>
+                <span v-else-if="r.valorConsulta" class="text-sm font-semibold" style="color:#16a34a">{{ fmtBRL(r.valorConsulta) }}</span>
                 <span v-else class="text-xs px-2 py-0.5 rounded-full" style="background:#fef3c7;color:#d97706">Não definido</span>
               </td>
               <td class="px-4 py-3">
                 <span class="text-sm font-bold px-2.5 py-1 rounded-full" style="background:#dbeafe;color:#2563eb">
                   {{ r.consultas }}
                 </span>
+              </td>
+              <td class="px-4 py-3 hidden sm:table-cell text-sm font-medium" style="color:var(--color-text-muted)">
+                {{ fmtHoras(r.minutosTrabalhados) }}
               </td>
               <td class="px-4 py-3">
                 <span class="text-sm font-bold" style="color:#16a34a">{{ fmtBRL(r.receitaTotal) }}</span>
@@ -345,6 +384,7 @@ function exportarCSV() {
                   {{ totalConsultas }}
                 </span>
               </td>
+              <td class="px-4 py-3 hidden sm:table-cell font-bold text-sm" style="color:var(--color-text-muted)">{{ fmtHoras(totalMinutos) }}</td>
               <td class="px-4 py-3 font-bold text-lg" style="color:#16a34a">{{ fmtBRL(receitaTotal) }}</td>
               <td class="px-4 py-3 hidden lg:table-cell" />
             </tr>

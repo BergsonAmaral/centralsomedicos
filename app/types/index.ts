@@ -31,6 +31,7 @@ export interface Medico {
   ativo: boolean
   pausado: boolean
   valor_consulta: number | null
+  valor_hora: number | null
   assinatura_url: string | null
   created_at: string
   // Expediente — usado para calcular horários disponíveis no agendamento público

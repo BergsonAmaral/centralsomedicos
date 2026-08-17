@@ -23,6 +23,7 @@ const schema = toTypedSchema(
       : z.union([z.string().min(8, 'Mínimo 8 caracteres'), z.literal('')]).optional(),
     telefone: z.string().optional(),
     valor_consulta: z.number({ invalid_type_error: 'Informe um valor válido' }).min(0).optional(),
+    valor_hora: z.number({ invalid_type_error: 'Informe um valor válido' }).min(0).optional(),
   })
 )
 
@@ -35,6 +36,7 @@ const [email, emailAttrs] = defineField('email')
 const [senha, senhaAttrs] = defineField('senha')
 const [telefone, telefoneAttrs] = defineField('telefone')
 const [valorConsulta, valorConsultaAttrs] = defineField('valor_consulta')
+const [valorHora, valorHoraAttrs] = defineField('valor_hora')
 
 const senhaVisivel = ref(false)
 
@@ -57,6 +59,7 @@ onMounted(async () => {
           email: data.email ?? '',
           senha: '',
           valor_consulta: data.valor_consulta ?? undefined,
+          valor_hora: data.valor_hora ?? undefined,
         })
         emailOriginal.value = data.email ?? ''
         fotoPreview.value = data.foto_url
@@ -101,6 +104,7 @@ const onSubmit = handleSubmit(async (values) => {
           senha: values.senha,
           foto_url: fotoUrl,
           valor_consulta: values.valor_consulta ?? 0,
+          valor_hora: values.valor_hora ?? null,
         },
       }).catch((e) => {
         throw new Error(e?.data?.message ?? 'Erro ao criar médico')
@@ -118,6 +122,7 @@ const onSubmit = handleSubmit(async (values) => {
         especialidade: values.especialidade,
         foto_url: fotoUrl,
         valor_consulta: values.valor_consulta ?? null,
+        valor_hora: values.valor_hora ?? null,
       }).eq('id', id)
 
       // Atualiza credenciais (email/senha) se mudaram
@@ -239,25 +244,47 @@ async function excluirMedico() {
         <template #header>
           <h3 class="font-semibold">Financeiro</h3>
         </template>
-        <div>
-          <label class="block text-sm font-medium text-[var(--color-text-muted)] mb-1">Valor por consulta (R$)</label>
-          <div class="relative max-w-xs">
-            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold" style="color:var(--color-text-dim)">R$</span>
-            <input
-              v-bind="valorConsultaAttrs"
-              :value="valorConsulta"
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="0,00"
-              class="w-full pl-9 pr-4 py-2.5 rounded-xl border text-sm outline-none focus:border-blue-400 transition-colors"
-              style="border-color:var(--color-border);background:var(--color-surface-2)"
-              @input="valorConsulta = Number(($event.target as HTMLInputElement).value)"
-            />
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-[var(--color-text-muted)] mb-1">Valor por consulta (R$)</label>
+            <div class="relative">
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold" style="color:var(--color-text-dim)">R$</span>
+              <input
+                v-bind="valorConsultaAttrs"
+                :value="valorConsulta"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0,00"
+                class="w-full pl-9 pr-4 py-2.5 rounded-xl border text-sm outline-none focus:border-blue-400 transition-colors"
+                style="border-color:var(--color-border);background:var(--color-surface-2)"
+                @input="valorConsulta = Number(($event.target as HTMLInputElement).value)"
+              />
+            </div>
+            <p v-if="errors.valor_consulta" class="text-xs text-red-500 mt-1">{{ errors.valor_consulta }}</p>
           </div>
-          <p v-if="errors.valor_consulta" class="text-xs text-red-500 mt-1">{{ errors.valor_consulta }}</p>
-          <p class="text-xs text-[var(--color-text-dim)] mt-1">Usado no painel financeiro para calcular a receita gerada por este médico.</p>
+          <div>
+            <label class="block text-sm font-medium text-[var(--color-text-muted)] mb-1">Valor por hora (R$)</label>
+            <div class="relative">
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold" style="color:var(--color-text-dim)">R$</span>
+              <input
+                v-bind="valorHoraAttrs"
+                :value="valorHora"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0,00"
+                class="w-full pl-9 pr-4 py-2.5 rounded-xl border text-sm outline-none focus:border-blue-400 transition-colors"
+                style="border-color:var(--color-border);background:var(--color-surface-2)"
+                @input="valorHora = Number(($event.target as HTMLInputElement).value)"
+              />
+            </div>
+            <p v-if="errors.valor_hora" class="text-xs text-red-500 mt-1">{{ errors.valor_hora }}</p>
+          </div>
         </div>
+        <p class="text-xs text-[var(--color-text-dim)] mt-2">
+          Usado no painel financeiro. Se "valor por hora" estiver preenchido, a receita desse médico é calculada pelas horas trabalhadas; senão, por consulta.
+        </p>
       </UiCard>
 
       <!-- Erro geral -->
