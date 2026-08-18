@@ -161,7 +161,7 @@ async function logout() {
           <span>{{ item.label }}</span>
         </NuxtLink>
         <a
-          href="https://mail.zoho.com"
+          href="https://360.yandex.com/mail"
           target="_blank"
           rel="noopener"
           class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium"
@@ -286,7 +286,7 @@ async function logout() {
             {{ item.label }}
           </NuxtLink>
           <a
-            href="https://mail.zoho.com"
+            href="https://360.yandex.com/mail"
             target="_blank"
             rel="noopener"
             class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium"
