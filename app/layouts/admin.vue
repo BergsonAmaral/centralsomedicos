@@ -19,6 +19,8 @@ import {
   Building2,
   UserCog,
   ShieldCheck,
+  Mail,
+  ExternalLink,
 } from 'lucide-vue-next'
 import { useAuthStore } from '~/stores/auth'
 
@@ -158,6 +160,17 @@ async function logout() {
           <component :is="item.icon" :size="16" :style="isActive(item.to) ? 'color:#2daa8a' : 'color:rgba(255,255,255,0.4)'" />
           <span>{{ item.label }}</span>
         </NuxtLink>
+        <a
+          href="https://mail.zoho.com"
+          target="_blank"
+          rel="noopener"
+          class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium"
+          style="color:rgba(255,255,255,0.55)"
+        >
+          <Mail :size="16" style="color:rgba(255,255,255,0.4)" />
+          <span>E-mail</span>
+          <ExternalLink :size="12" class="ml-auto" style="color:rgba(255,255,255,0.3)" />
+        </a>
       </nav>
 
       <!-- Perfil -->
@@ -272,6 +285,18 @@ async function logout() {
             <component :is="item.icon" :size="16" :style="isActive(item.to) ? 'color:#2daa8a' : 'color:rgba(255,255,255,0.4)'" />
             {{ item.label }}
           </NuxtLink>
+          <a
+            href="https://mail.zoho.com"
+            target="_blank"
+            rel="noopener"
+            class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium"
+            style="color:rgba(255,255,255,0.55)"
+            @click="sidebarOpen = false"
+          >
+            <Mail :size="16" style="color:rgba(255,255,255,0.4)" />
+            <span>E-mail</span>
+            <ExternalLink :size="12" class="ml-auto" style="color:rgba(255,255,255,0.3)" />
+          </a>
         </nav>
         <div class="px-3 pb-4">
           <button class="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium" style="color:#f87171" @click="logout">
