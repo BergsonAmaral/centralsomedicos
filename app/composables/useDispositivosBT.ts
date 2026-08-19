@@ -167,6 +167,15 @@ function decodificarBioimpedancia(data: DataView): { gordura_percentual: number;
 
 // ─── Composable principal ─────────────────────────────────────────────────────
 
+function mensagemErroBT(e: any): string {
+  const nome = e?.name ?? ''
+  if (nome === 'NotFoundError') return 'Nenhum aparelho selecionado, ou o Bluetooth do computador/celular está desligado.'
+  if (nome === 'SecurityError') return 'Este site precisa estar em HTTPS pra usar Bluetooth (já deveria estar — recarregue a página).'
+  if (nome === 'NotSupportedError') return 'Este aparelho não é compatível (não usa Bluetooth de baixa energia / BLE).'
+  if (nome === 'NetworkError') return 'Falha na conexão com o aparelho — tente aproximar mais ou parear de novo.'
+  return e?.message ?? 'Erro ao conectar'
+}
+
 export function useDispositivosBT() {
   const suportado = computed(() => typeof navigator !== 'undefined' && 'bluetooth' in navigator)
 
@@ -185,9 +194,14 @@ export function useDispositivosBT() {
     const s = estado.pressao
     s.erro = null; s.lendo = true
     try {
+      // acceptAllDevices em vez de filtrar por serviço: muitos aparelhos de
+      // pressão não anunciam o serviço 0x1810 no pacote de advertising (só
+      // expõem depois de conectado), então o filtro por serviço fazia o
+      // navegador não encontrar nada. Mostrando todos os aparelhos próximos,
+      // a pessoa escolhe pelo nome e a gente tenta ler o serviço depois.
       const device = await (navigator as any).bluetooth.requestDevice({
-        filters: [{ services: [GATT.pressao.service] }],
-        optionalServices: [GATT.frequencia.service],
+        acceptAllDevices: true,
+        optionalServices: [GATT.pressao.service, GATT.frequencia.service],
       })
       const server = await device.gatt.connect()
       s.conectado = true
@@ -217,7 +231,7 @@ export function useDispositivosBT() {
       } catch { /* aparelho sem serviço de FC separado */ }
 
     } catch (e: any) {
-      s.erro = e.message ?? 'Erro ao conectar'
+      s.erro = mensagemErroBT(e)
       s.lendo = false
       s.conectado = false
     }
@@ -228,8 +242,8 @@ export function useDispositivosBT() {
     s.erro = null; s.lendo = true
     try {
       const device = await (navigator as any).bluetooth.requestDevice({
-        filters: [{ services: [GATT.oximetro.service] }],
-        optionalServices: [GATT.frequencia.service],
+        acceptAllDevices: true,
+        optionalServices: [GATT.oximetro.service, GATT.frequencia.service],
       })
       const server = await device.gatt.connect()
       s.conectado = true
@@ -245,7 +259,7 @@ export function useDispositivosBT() {
         s.lendo = false
       })
     } catch (e: any) {
-      s.erro = e.message ?? 'Erro ao conectar'
+      s.erro = mensagemErroBT(e)
       s.lendo = false
       s.conectado = false
     }
@@ -256,7 +270,8 @@ export function useDispositivosBT() {
     s.erro = null; s.lendo = true
     try {
       const device = await (navigator as any).bluetooth.requestDevice({
-        filters: [{ services: [GATT.termometro.service] }],
+        acceptAllDevices: true,
+        optionalServices: [GATT.termometro.service],
       })
       const server = await device.gatt.connect()
       s.conectado = true
@@ -270,7 +285,7 @@ export function useDispositivosBT() {
         s.lendo = false
       })
     } catch (e: any) {
-      s.erro = e.message ?? 'Erro ao conectar'
+      s.erro = mensagemErroBT(e)
       s.lendo = false
       s.conectado = false
     }
@@ -281,7 +296,8 @@ export function useDispositivosBT() {
     s.erro = null; s.lendo = true
     try {
       const device = await (navigator as any).bluetooth.requestDevice({
-        filters: [{ services: [GATT.balanca.service] }],
+        acceptAllDevices: true,
+        optionalServices: [GATT.balanca.service],
       })
       const server = await device.gatt.connect()
       s.conectado = true
@@ -295,7 +311,7 @@ export function useDispositivosBT() {
         s.lendo = false
       })
     } catch (e: any) {
-      s.erro = e.message ?? 'Erro ao conectar'
+      s.erro = mensagemErroBT(e)
       s.lendo = false
       s.conectado = false
     }
@@ -306,7 +322,8 @@ export function useDispositivosBT() {
     s.erro = null; s.lendo = true
     try {
       const device = await (navigator as any).bluetooth.requestDevice({
-        filters: [{ services: [GATT.glicosimetro.service] }],
+        acceptAllDevices: true,
+        optionalServices: [GATT.glicosimetro.service],
       })
       const server = await device.gatt.connect()
       s.conectado = true
@@ -320,7 +337,7 @@ export function useDispositivosBT() {
         s.lendo = false
       })
     } catch (e: any) {
-      s.erro = e.message ?? 'Erro ao conectar'
+      s.erro = mensagemErroBT(e)
       s.lendo = false
       s.conectado = false
     }
@@ -331,7 +348,8 @@ export function useDispositivosBT() {
     s.erro = null; s.lendo = true
     try {
       const device = await (navigator as any).bluetooth.requestDevice({
-        filters: [{ services: [GATT.bioimpedancia.service] }],
+        acceptAllDevices: true,
+        optionalServices: [GATT.bioimpedancia.service],
       })
       const server = await device.gatt.connect()
       s.conectado = true
@@ -347,7 +365,7 @@ export function useDispositivosBT() {
         s.lendo = false
       })
     } catch (e: any) {
-      s.erro = e.message ?? 'Erro ao conectar'
+      s.erro = mensagemErroBT(e)
       s.lendo = false
       s.conectado = false
     }
