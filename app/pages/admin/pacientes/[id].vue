@@ -95,12 +95,14 @@ const agendamentosFiltrados = computed(() => {
 })
 
 // Agrupa por dia da consulta — mais fácil de ler o histórico assim do que
-// numa lista corrida, ainda mais pra paciente com muitas consultas.
+// numa lista corrida, ainda mais pra paciente com muitas consultas. A
+// numeração (#) é contínua entre os dias, tipo linha de planilha.
+interface AgComIndice { ag: Agendamento; indice: number }
 const agendamentosPorDia = computed(() => {
-  const grupos: Record<string, Agendamento[]> = {}
-  for (const a of agendamentosFiltrados.value) {
-    (grupos[a.data_consulta] ??= []).push(a)
-  }
+  const grupos: Record<string, AgComIndice[]> = {}
+  agendamentosFiltrados.value.forEach((a, i) => {
+    (grupos[a.data_consulta] ??= []).push({ ag: a, indice: i + 1 })
+  })
   return Object.entries(grupos).sort(([a], [b]) => b.localeCompare(a))
 })
 
@@ -118,12 +120,13 @@ const filtroTipoDoc = ref('')
 const documentosFiltrados = computed(() =>
   filtroTipoDoc.value ? documentos.value.filter((d) => d.tipo === filtroTipoDoc.value) : documentos.value
 )
+interface DocComIndice { doc: Documento; indice: number }
 const documentosPorDia = computed(() => {
-  const grupos: Record<string, Documento[]> = {}
-  for (const d of documentosFiltrados.value) {
+  const grupos: Record<string, DocComIndice[]> = {}
+  documentosFiltrados.value.forEach((d, i) => {
     const dia = d.created_at.slice(0, 10)
-    ;(grupos[dia] ??= []).push(d)
-  }
+    ;(grupos[dia] ??= []).push({ doc: d, indice: i + 1 })
+  })
   return Object.entries(grupos).sort(([a], [b]) => b.localeCompare(a))
 })
 
@@ -388,10 +391,11 @@ const TIPOS_LABELS: Record<string, string> = {
             </p>
             <div class="space-y-2">
               <div
-                v-for="ag in itens"
+                v-for="{ ag, indice } in itens"
                 :key="ag.id"
                 class="flex items-center justify-between p-3 rounded-lg border border-[var(--color-border-light)] hover:bg-[var(--color-surface-2)]"
               >
+                <span class="text-xs font-mono shrink-0 w-6" style="color:var(--color-text-dim)">{{ indice }}</span>
                 <div class="min-w-0 flex-1">
                   <div class="flex items-center gap-2 flex-wrap">
                     <UiBadge :variant="ag.status as any" />
@@ -453,11 +457,12 @@ const TIPOS_LABELS: Record<string, string> = {
             </p>
             <div class="space-y-2">
               <div
-                v-for="doc in itens"
+                v-for="{ doc, indice } in itens"
                 :key="doc.id"
                 class="flex items-center justify-between p-3 rounded-lg border border-[var(--color-border-light)]"
               >
-                <div>
+                <span class="text-xs font-mono shrink-0 w-6" style="color:var(--color-text-dim)">{{ indice }}</span>
+                <div class="flex-1 min-w-0">
                   <p class="text-sm font-medium text-[var(--color-text)]">{{ TIPOS_LABELS[doc.tipo] ?? doc.tipo }}</p>
                   <p class="text-xs text-[var(--color-text-muted)]">
                     {{ new Date(doc.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) }} — {{ (doc.medicos as any)?.nome }}

@@ -72,13 +72,16 @@ const documentosFiltrados = computed(() => {
   })
 })
 
-// Agrupado por dia — facilita achar o documento de um atendimento específico
+// Agrupado por dia — facilita achar o documento de um atendimento específico.
+// A numeração (#) é contínua entre os grupos, tipo linha de planilha, não
+// reinicia a cada dia.
+interface DocComIndice { doc: Documento; indice: number }
 const documentosPorDia = computed(() => {
-  const grupos: Record<string, Documento[]> = {}
-  for (const d of documentosFiltrados.value) {
+  const grupos: Record<string, DocComIndice[]> = {}
+  documentosFiltrados.value.forEach((d, i) => {
     const dia = d.created_at.slice(0, 10)
-    ;(grupos[dia] ??= []).push(d)
-  }
+    ;(grupos[dia] ??= []).push({ doc: d, indice: i + 1 })
+  })
   return Object.entries(grupos).sort(([a], [b]) => b.localeCompare(a))
 })
 
@@ -149,11 +152,12 @@ function fmtDiaGrupo(data: string): string {
         <table class="w-full text-sm">
           <tbody>
             <tr
-              v-for="doc in itens" :key="doc.id"
+              v-for="{ doc, indice } in itens" :key="doc.id"
               class="border-b transition-colors hover:bg-blue-50 cursor-pointer last:border-b-0"
               style="border-color:var(--color-border-light)"
               @click="abrirVer(doc)"
             >
+              <td class="px-4 py-3 text-xs font-mono w-10" style="color:var(--color-text-dim)">{{ indice }}</td>
               <td class="px-4 py-3">
                 <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" :style="`background:${TIPOS_CORES[doc.tipo]}18;color:${TIPOS_CORES[doc.tipo]}`">
                   <FileText :size="11" /> {{ TIPOS_LABELS[doc.tipo] ?? doc.tipo }}

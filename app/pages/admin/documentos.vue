@@ -453,6 +453,7 @@ const paginasVisiveis = computed(() => {
         <table class="w-full text-sm">
           <thead>
             <tr style="border-bottom:1px solid var(--color-border-light);background:var(--color-surface-2)">
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide w-10" style="color:var(--color-text-muted)">#</th>
               <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide" style="color:var(--color-text-muted)">Tipo</th>
               <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide" style="color:var(--color-text-muted)">Paciente</th>
               <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide hidden md:table-cell" style="color:var(--color-text-muted)">Médico</th>
@@ -463,12 +464,15 @@ const paginasVisiveis = computed(() => {
           </thead>
           <tbody>
             <tr
-              v-for="doc in documentos"
+              v-for="(doc, i) in documentos"
               :key="doc.id"
               class="border-b transition-colors hover:bg-blue-50 cursor-pointer"
               style="border-color:var(--color-border-light)"
               @click="abrirVer(doc)"
             >
+              <td class="px-4 py-3 text-xs font-mono" style="color:var(--color-text-dim)">
+                {{ (pagina - 1) * POR_PAGINA + i + 1 }}
+              </td>
               <td class="px-4 py-3">
                 <span
                   class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
