@@ -28,7 +28,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody(event)
-  const { nome, crm, especialidade, email, senha, foto_url, valor_consulta, valor_hora } = body
+  const { nome, crm, especialidade, email, senha, foto_url, valor_consulta, valor_hora, meta_atendimentos_hora, valor_hora_bonus } = body
 
   if (!email || !senha || !nome || !crm || !especialidade) {
     throw createError({ statusCode: 400, message: 'Campos obrigatórios faltando' })
@@ -84,6 +84,8 @@ export default defineEventHandler(async (event) => {
       pausado: false,
       valor_consulta: valor_consulta ?? 0,
       valor_hora: valor_hora ?? null,
+      meta_atendimentos_hora: meta_atendimentos_hora ?? null,
+      valor_hora_bonus: valor_hora_bonus ?? null,
     })
 
     if (medicoError) throw medicoError

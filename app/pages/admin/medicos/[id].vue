@@ -24,6 +24,8 @@ const schema = toTypedSchema(
     telefone: z.string().optional(),
     valor_consulta: z.number({ invalid_type_error: 'Informe um valor válido' }).min(0).optional(),
     valor_hora: z.number({ invalid_type_error: 'Informe um valor válido' }).min(0).optional(),
+    meta_atendimentos_hora: z.number({ invalid_type_error: 'Informe um número válido' }).min(1).optional(),
+    valor_hora_bonus: z.number({ invalid_type_error: 'Informe um valor válido' }).min(0).optional(),
   })
 )
 
@@ -37,6 +39,8 @@ const [senha, senhaAttrs] = defineField('senha')
 const [telefone, telefoneAttrs] = defineField('telefone')
 const [valorConsulta, valorConsultaAttrs] = defineField('valor_consulta')
 const [valorHora, valorHoraAttrs] = defineField('valor_hora')
+const [metaAtendimentosHora, metaAtendimentosHoraAttrs] = defineField('meta_atendimentos_hora')
+const [valorHoraBonus, valorHoraBonusAttrs] = defineField('valor_hora_bonus')
 
 const senhaVisivel = ref(false)
 
@@ -60,6 +64,8 @@ onMounted(async () => {
           senha: '',
           valor_consulta: data.valor_consulta ?? undefined,
           valor_hora: data.valor_hora ?? undefined,
+          meta_atendimentos_hora: data.meta_atendimentos_hora ?? undefined,
+          valor_hora_bonus: data.valor_hora_bonus ?? undefined,
         })
         emailOriginal.value = data.email ?? ''
         fotoPreview.value = data.foto_url
@@ -105,6 +111,8 @@ const onSubmit = handleSubmit(async (values) => {
           foto_url: fotoUrl,
           valor_consulta: values.valor_consulta ?? 0,
           valor_hora: values.valor_hora ?? null,
+          meta_atendimentos_hora: values.meta_atendimentos_hora ?? null,
+          valor_hora_bonus: values.valor_hora_bonus ?? null,
         },
       }).catch((e) => {
         throw new Error(e?.data?.message ?? 'Erro ao criar médico')
@@ -123,6 +131,8 @@ const onSubmit = handleSubmit(async (values) => {
         foto_url: fotoUrl,
         valor_consulta: values.valor_consulta ?? null,
         valor_hora: values.valor_hora ?? null,
+        meta_atendimentos_hora: values.meta_atendimentos_hora ?? null,
+        valor_hora_bonus: values.valor_hora_bonus ?? null,
       }).eq('id', id)
 
       // Atualiza credenciais (email/senha) se mudaram
@@ -285,6 +295,45 @@ async function excluirMedico() {
         </div>
         <p class="text-xs text-[var(--color-text-dim)] mt-2">
           Usado no painel financeiro. Se "valor por hora" estiver preenchido, a receita desse médico é calculada pelas horas trabalhadas; senão, por consulta.
+        </p>
+
+        <div class="grid grid-cols-2 gap-4 mt-4 pt-4" style="border-top:1px solid var(--color-border-light)">
+          <div>
+            <label class="block text-sm font-medium text-[var(--color-text-muted)] mb-1">Meta de atendimentos/hora</label>
+            <input
+              v-bind="metaAtendimentosHoraAttrs"
+              :value="metaAtendimentosHora"
+              type="number"
+              min="1"
+              step="1"
+              placeholder="ex: 5"
+              class="w-full px-4 py-2.5 rounded-xl border text-sm outline-none focus:border-blue-400 transition-colors"
+              style="border-color:var(--color-border);background:var(--color-surface-2)"
+              @input="metaAtendimentosHora = Number(($event.target as HTMLInputElement).value)"
+            />
+            <p v-if="errors.meta_atendimentos_hora" class="text-xs text-red-500 mt-1">{{ errors.meta_atendimentos_hora }}</p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-[var(--color-text-muted)] mb-1">Valor/hora bônus (R$)</label>
+            <div class="relative">
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold" style="color:var(--color-text-dim)">R$</span>
+              <input
+                v-bind="valorHoraBonusAttrs"
+                :value="valorHoraBonus"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0,00"
+                class="w-full pl-9 pr-4 py-2.5 rounded-xl border text-sm outline-none focus:border-blue-400 transition-colors"
+                style="border-color:var(--color-border);background:var(--color-surface-2)"
+                @input="valorHoraBonus = Number(($event.target as HTMLInputElement).value)"
+              />
+            </div>
+            <p v-if="errors.valor_hora_bonus" class="text-xs text-red-500 mt-1">{{ errors.valor_hora_bonus }}</p>
+          </div>
+        </div>
+        <p class="text-xs text-[var(--color-text-dim)] mt-2">
+          Comissão por produtividade: se numa hora específica o médico atender mais pacientes do que a meta, essa hora vale o valor/hora bônus em vez do valor/hora normal, na Folha de Pagamento.
         </p>
       </UiCard>
 

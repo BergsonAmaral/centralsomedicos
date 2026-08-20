@@ -38,6 +38,7 @@ const dataFim = ref(hoje())
 const medicoFiltro = ref('')
 const medicos = ref<{
   id: string; nome: string; especialidade: string; valor_consulta: number | null; valor_hora: number | null
+  meta_atendimentos_hora: number | null; valor_hora_bonus: number | null
   dias_atendimento: number[] | null; horario_inicio: string | null; horario_fim: string | null
 }[]>([])
 
@@ -87,7 +88,10 @@ const linhas = ref<RowMedico[]>([])
 // Sala pertence à unidade, não ao médico — então "quanto um médico trabalhou
 // numa unidade" vem da unidade do PACIENTE de cada consulta, não de um
 // vínculo fixo médico↔unidade (que não existe).
-interface LinhaFolha { medicoId: string; nome: string; especialidade: string; valorHora: number; horasMin: number; valorPagar: number }
+interface LinhaFolha {
+  medicoId: string; nome: string; especialidade: string; valorHora: number
+  horasMin: number; horasBonusMin: number; valorPagar: number
+}
 interface UnidadeFolha { unidadeId: string; unidadeNome: string; linhas: LinhaFolha[]; totalHorasMin: number; totalFolha: number; qtdMedicos: number }
 const unidadesTodas = ref<{ id: string; nome: string }[]>([])
 const folhaPorUnidade = ref<UnidadeFolha[]>([])
@@ -98,24 +102,30 @@ async function carregarFolhaPagamento() {
 
   let q = supabase
     .from('consultas')
-    .select('medico_id, duracao_minutos, pacientes(unidade_id)')
+    .select('medico_id, duracao_minutos, created_at, pacientes(unidade_id)')
     .gte('created_at', `${dataIni.value}T00:00:00`)
     .lte('created_at', `${dataFim.value}T23:59:59`)
   if (medicoFiltro.value) q = q.eq('medico_id', medicoFiltro.value)
   const { data: consultas } = await q
 
-  // minutos por (unidade, médico)
+  // Agrupa por (unidade, médico) — e dentro disso, por hora-relógio, pra
+  // aplicar a comissão: se numa hora específica o médico atendeu mais
+  // pacientes que a meta cadastrada, os minutos daquela hora entram na
+  // "bolsa bônus" (pagos no valor/hora bônus) em vez do valor/hora normal.
   const chave = (u: string, m: string) => `${u}::${m}`
-  const minutosPar: Record<string, number> = {}
+  const porPar: Record<string, { minutosTotal: number; porHora: Record<string, { count: number; min: number }> }> = {}
   ;(consultas ?? []).forEach((c: any) => {
     const unidadeId = c.pacientes?.unidade_id
     if (!c.medico_id || !unidadeId) return
     const k = chave(unidadeId, c.medico_id)
-    minutosPar[k] = (minutosPar[k] ?? 0) + (c.duracao_minutos ?? 0)
+    const acc = porPar[k] ??= { minutosTotal: 0, porHora: {} }
+    const min = c.duracao_minutos ?? 0
+    acc.minutosTotal += min
+    const horaBucket = (c.created_at as string).slice(0, 13) // "YYYY-MM-DDTHH"
+    const h = acc.porHora[horaBucket] ??= { count: 0, min: 0 }
+    h.count += 1
+    h.min += min
   })
-
-  const medicosPorId: Record<string, typeof medicos.value[number]> = {}
-  medicos.value.forEach(m => { medicosPorId[m.id] = m })
 
   const resultado: UnidadeFolha[] = []
   for (const u of unidadesTodas.value) {
@@ -124,12 +134,27 @@ async function carregarFolhaPagamento() {
     let totalFolha = 0
     for (const m of medicos.value) {
       if (medicoFiltro.value && m.id !== medicoFiltro.value) continue
-      const min = minutosPar[chave(u.id, m.id)] ?? 0
-      if (!min) continue
+      const dados = porPar[chave(u.id, m.id)]
+      if (!dados || !dados.minutosTotal) continue
+
       const valorHora = m.valor_hora ?? 0
-      const valorPagar = valorHora ? (min / 60) * valorHora : 0
-      linhasU.push({ medicoId: m.id, nome: m.nome, especialidade: m.especialidade, valorHora, horasMin: min, valorPagar })
-      totalHorasMin += min
+      const valorBonus = m.valor_hora_bonus ?? valorHora
+      const meta = m.meta_atendimentos_hora ?? null
+
+      let minutosBonus = 0
+      if (meta) {
+        for (const h of Object.values(dados.porHora)) {
+          if (h.count > meta) minutosBonus += h.min
+        }
+      }
+      const minutosNormal = dados.minutosTotal - minutosBonus
+      const valorPagar = (minutosNormal / 60) * valorHora + (minutosBonus / 60) * valorBonus
+
+      linhasU.push({
+        medicoId: m.id, nome: m.nome, especialidade: m.especialidade, valorHora,
+        horasMin: dados.minutosTotal, horasBonusMin: minutosBonus, valorPagar,
+      })
+      totalHorasMin += dados.minutosTotal
       totalFolha += valorPagar
     }
     if (linhasU.length) {
@@ -169,7 +194,7 @@ async function carregar() {
   // Buscar todos os médicos com valor_consulta / valor_hora
   const { data: meds } = await supabase
     .from('medicos')
-    .select('id, nome, especialidade, valor_consulta, valor_hora, dias_atendimento, horario_inicio, horario_fim')
+    .select('id, nome, especialidade, valor_consulta, valor_hora, meta_atendimentos_hora, valor_hora_bonus, dias_atendimento, horario_inicio, horario_fim')
     .eq('ativo', true)
     .order('nome')
   medicos.value = (meds ?? []) as typeof medicos.value
@@ -332,8 +357,9 @@ function unidadesParaExportar(): UnidadeFolha[] {
   return base.map(u => {
     const porEsp: Record<string, LinhaFolha> = {}
     for (const l of u.linhas) {
-      const acc = porEsp[l.especialidade] ??= { medicoId: '', nome: l.especialidade, especialidade: l.especialidade, valorHora: 0, horasMin: 0, valorPagar: 0 }
+      const acc = porEsp[l.especialidade] ??= { medicoId: '', nome: l.especialidade, especialidade: l.especialidade, valorHora: 0, horasMin: 0, horasBonusMin: 0, valorPagar: 0 }
       acc.horasMin += l.horasMin
+      acc.horasBonusMin += l.horasBonusMin
       acc.valorPagar += l.valorPagar
     }
     return { ...u, linhas: Object.values(porEsp).sort((a, b) => a.nome.localeCompare(b.nome)) }
@@ -366,7 +392,11 @@ async function exportarFolhaPagamento() {
       blocos.push({ text: `Total da folha: ${fmtBRL(u.totalFolha)}`, style: 'infoLinha', margin: [0, 0, 0, 8] })
 
       const corpo = folhaAgrupamento.value === 'medico'
-        ? u.linhas.map(l => [l.nome, l.especialidade, fmtBRL(l.valorHora), fmtHoras(l.horasMin), { text: fmtBRL(l.valorPagar), bold: true }])
+        ? u.linhas.map(l => [
+            l.nome, l.especialidade, fmtBRL(l.valorHora),
+            l.horasBonusMin > 0 ? `${fmtHoras(l.horasMin)} (${fmtHoras(l.horasBonusMin)} bônus)` : fmtHoras(l.horasMin),
+            { text: fmtBRL(l.valorPagar), bold: true },
+          ])
         : u.linhas.map(l => [l.especialidade, fmtHoras(l.horasMin), { text: fmtBRL(l.valorPagar), bold: true }])
 
       const linhaTotal = folhaAgrupamento.value === 'medico'
