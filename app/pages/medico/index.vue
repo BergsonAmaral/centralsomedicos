@@ -163,6 +163,7 @@ async function medicoIniciar(id: string) {
 }
 
 function iniciarTimer() {
+  if (timerInterval) clearInterval(timerInterval)
   timerSeg.value = 0
   timerInterval = setInterval(() => timerSeg.value++, 1000)
 }
@@ -179,9 +180,13 @@ function formatarTimer(seg: number): string {
   return h > 0 ? `${h}:${m}:${s}` : `${m}:${s}`
 }
 
-watch(emConsulta, (val) => {
-  if (val) iniciarTimer()
-  else pararTimer()
+// Observa só o ID (não o objeto inteiro) — a fila é recarregada a cada
+// poll/evento em tempo real e devolve um objeto novo pra mesma consulta,
+// então observar o objeto direto reiniciava o cronômetro pra 0 a cada
+// atualização, mesmo sem trocar de paciente ("tempo ficando doido").
+watch(() => emConsulta.value?.id, (novoId, antigoId) => {
+  if (novoId && novoId !== antigoId) iniciarTimer()
+  else if (!novoId) pararTimer()
 }, { immediate: true })
 
 async function togglePausa() {
