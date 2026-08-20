@@ -328,6 +328,7 @@ onUnmounted(() => {
         <a href="#servicos"       @click="mobileMenu=false">Serviços</a>
         <a href="#especialidades" @click="mobileMenu=false">Especialidades</a>
         <a href="#onde-atuamos"   @click="mobileMenu=false">Onde Atuamos</a>
+        <NuxtLink to="/auth/login" @click="mobileMenu=false">Plataforma</NuxtLink>
         <a href="#contato"        @click="mobileMenu=false" class="mobile-cta">Fale conosco →</a>
       </div>
 
