@@ -6,6 +6,7 @@ definePageMeta({ layout: 'admin', middleware: ['auth', 'role'] })
 
 const authStore = useAuthStore()
 const toast = useToast()
+const adminLog = useAdminLog()
 
 interface AdminRow { id: string; nome: string; email: string | null; is_superadmin: boolean; created_at: string }
 const admins = ref<AdminRow[]>([])
@@ -29,6 +30,9 @@ async function excluir(a: AdminRow) {
   excluindo.value = a.id
   try {
     await $fetch('/api/admin/delete-admin', { method: 'POST', body: { adminId: a.id } })
+    try {
+      await adminLog.registrar('admin_excluido', { entidade: 'admin', entidadeId: a.id, detalhes: { nome: a.nome } })
+    } catch {}
     toast.sucesso('Admin excluído.')
     await carregar()
   } catch (e: any) {
@@ -66,6 +70,9 @@ async function salvar() {
       method: 'POST',
       body: { nome: form.value.nome.trim(), email: form.value.email.trim(), senha: form.value.senha },
     })
+    try {
+      await adminLog.registrar('admin_criado', { entidade: 'admin', detalhes: { nome: form.value.nome.trim(), email: form.value.email.trim() } })
+    } catch {}
     modalAberto.value = false
     toast.sucesso('Admin cadastrado com sucesso!')
     await carregar()

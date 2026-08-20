@@ -106,6 +106,11 @@ const acoesDisponiveis: { value: AdminLogAcao; label: string }[] = [
   { value: 'medico_editado', label: 'Médico editado' },
   { value: 'medico_pausado', label: 'Médico pausado' },
   { value: 'medico_ativado', label: 'Médico ativado' },
+  { value: 'atendente_criado', label: 'Atendente criado' },
+  { value: 'atendente_editado', label: 'Atendente editado' },
+  { value: 'atendente_excluido', label: 'Atendente excluído' },
+  { value: 'admin_criado', label: 'Admin criado' },
+  { value: 'admin_excluido', label: 'Admin excluído' },
   { value: 'paciente_chamado', label: 'Paciente chamado' },
   { value: 'agendamento_criado', label: 'Agendamento criado' },
   { value: 'agendamento_cancelado', label: 'Agendamento cancelado' },
@@ -125,6 +130,11 @@ function infoAcao(acao: AdminLogAcao): { icone: any; cor: string; bg: string; la
     medico_editado:           { icone: Edit,      cor: '#0891b2', bg: '#cffafe', label: 'Médico editado' },
     medico_pausado:           { icone: Pause,     cor: '#a16207', bg: '#fef3c7', label: 'Médico pausado' },
     medico_ativado:           { icone: Play,      cor: '#16a34a', bg: '#dcfce7', label: 'Médico ativado' },
+    atendente_criado:         { icone: UserPlus,  cor: '#0891b2', bg: '#cffafe', label: 'Atendente criado' },
+    atendente_editado:        { icone: Edit,      cor: '#0891b2', bg: '#cffafe', label: 'Atendente editado' },
+    atendente_excluido:       { icone: Trash2,    cor: '#dc2626', bg: '#fee2e2', label: 'Atendente excluído' },
+    admin_criado:             { icone: UserPlus,  cor: '#7c3aed', bg: '#ede9fe', label: 'Admin criado' },
+    admin_excluido:           { icone: Trash2,    cor: '#dc2626', bg: '#fee2e2', label: 'Admin excluído' },
     paciente_chamado:         { icone: PhoneCall, cor: '#16a34a', bg: '#dcfce7', label: 'Chamou paciente' },
     paciente_recolocado_fila: { icone: UserCheck, cor: '#a16207', bg: '#fef3c7', label: 'Recolocado fila' },
     agendamento_criado:       { icone: UserCheck, cor: '#2563eb', bg: '#dbeafe', label: 'Agendamento criado' },
@@ -154,6 +164,11 @@ function descricao(log: AdminLog): string {
     case 'medico_editado':     return `Editou médico: ${d.nome ?? '—'}`
     case 'medico_pausado':     return `Pausou ${d.nome ?? 'médico'}`
     case 'medico_ativado':     return `Reativou ${d.nome ?? 'médico'}`
+    case 'atendente_criado':   return `Cadastrou atendente: ${d.nome ?? '—'}`
+    case 'atendente_editado':  return `Editou atendente: ${d.nome ?? '—'}`
+    case 'atendente_excluido': return `Excluiu atendente: ${d.nome ?? '—'}`
+    case 'admin_criado':       return `Cadastrou admin: ${d.nome ?? '—'}`
+    case 'admin_excluido':     return `Excluiu admin: ${d.nome ?? '—'}`
     case 'paciente_chamado':   return `Chamou ${d.paciente ?? '—'} para ${d.medico ?? '—'}`
     case 'agendamento_criado': return `Agendou ${d.paciente ?? '—'} com ${d.medico ?? '—'}`
     case 'importacao_sus':     return `Importou ${d.total ?? 0} pacientes (${d.criados ?? 0} novos)`

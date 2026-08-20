@@ -5,6 +5,7 @@ import type { Atendente, Unidade } from '~/types'
 definePageMeta({ layout: 'admin', middleware: ['auth', 'role'] })
 
 const supabase = useSupabaseClient()
+const adminLog = useAdminLog()
 const toast = useToast()
 
 const atendentes = ref<Atendente[]>([])
@@ -37,6 +38,9 @@ async function excluir(a: Atendente) {
   excluindo.value = a.id
   try {
     await $fetch('/api/admin/delete-atendente', { method: 'POST', body: { atendenteId: a.id } })
+    try {
+      await adminLog.registrar('atendente_excluido', { entidade: 'atendente', entidadeId: a.id, detalhes: { nome: a.nome } })
+    } catch {}
     toast.sucesso('Atendente excluído.')
     await carregar()
   } catch (e: any) {
@@ -110,6 +114,9 @@ async function salvar() {
           throw new Error(e?.data?.message ?? 'Erro ao atualizar credenciais')
         })
       }
+      try {
+        await adminLog.registrar('atendente_editado', { entidade: 'atendente', entidadeId: editandoId.value, detalhes: { nome: form.value.nome.trim() } })
+      } catch {}
       toast.sucesso('Alterações salvas com sucesso!')
     } else {
       await $fetch('/api/admin/create-atendente', {
@@ -121,6 +128,9 @@ async function salvar() {
           unidadeId: form.value.unidadeId,
         },
       })
+      try {
+        await adminLog.registrar('atendente_criado', { entidade: 'atendente', detalhes: { nome: form.value.nome.trim(), email: form.value.email.trim() } })
+      } catch {}
       toast.sucesso('Atendente cadastrado com sucesso!')
     }
     modalAberto.value = false
