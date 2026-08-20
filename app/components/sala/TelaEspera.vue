@@ -34,9 +34,27 @@ const avEnviando   = ref(false)
 const avEnviada    = ref(false)
 const avErro       = ref('')
 
+// Se o paciente for embora sem avaliar, a tela ficava presa mostrando
+// "avalie sua consulta" pra sempre — o agendamento nunca saía de
+// aguardando_avaliacao porque só o próprio envio da nota mudava o status.
+// Depois de um tempo sem resposta, finaliza sozinho e libera a sala.
+const supabase = useSupabaseClient()
+let avExpiraTimer: ReturnType<typeof setTimeout> | null = null
+
 watch(aguardandoAval, (val) => {
-  if (val) { avNota.value = 0; avHover.value = 0; avComentario.value = ''; avEnviada.value = false; avErro.value = '' }
+  if (avExpiraTimer) { clearTimeout(avExpiraTimer); avExpiraTimer = null }
+  if (val) {
+    avNota.value = 0; avHover.value = 0; avComentario.value = ''; avEnviada.value = false; avErro.value = ''
+    const agendamentoId = props.pacienteAtual?.id
+    if (agendamentoId) {
+      avExpiraTimer = setTimeout(() => {
+        supabase.from('agendamentos').update({ status: 'concluido' }).eq('id', agendamentoId).eq('status', 'aguardando_avaliacao')
+      }, 3 * 60 * 1000)
+    }
+  }
 })
+
+onUnmounted(() => { if (avExpiraTimer) clearTimeout(avExpiraTimer) })
 
 async function enviarAvaliacao() {
   if (!avNota.value || !props.pacienteAtual?.id) return
