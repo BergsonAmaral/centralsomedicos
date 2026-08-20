@@ -83,6 +83,66 @@ function calcularMinutosContratados(
 
 const linhas = ref<RowMedico[]>([])
 
+// ── Folha de Pagamento (por unidade) ──────────────────────────────────────
+// Sala pertence à unidade, não ao médico — então "quanto um médico trabalhou
+// numa unidade" vem da unidade do PACIENTE de cada consulta, não de um
+// vínculo fixo médico↔unidade (que não existe).
+interface LinhaFolha { medicoId: string; nome: string; especialidade: string; valorHora: number; horasMin: number; valorPagar: number }
+interface UnidadeFolha { unidadeId: string; unidadeNome: string; linhas: LinhaFolha[]; totalHorasMin: number; totalFolha: number; qtdMedicos: number }
+const unidadesTodas = ref<{ id: string; nome: string }[]>([])
+const folhaPorUnidade = ref<UnidadeFolha[]>([])
+
+async function carregarFolhaPagamento() {
+  const { data: uData } = await supabase.from('unidades').select('id, nome').eq('ativo', true).order('nome')
+  unidadesTodas.value = uData ?? []
+
+  let q = supabase
+    .from('consultas')
+    .select('medico_id, duracao_minutos, pacientes(unidade_id)')
+    .gte('created_at', `${dataIni.value}T00:00:00`)
+    .lte('created_at', `${dataFim.value}T23:59:59`)
+  if (medicoFiltro.value) q = q.eq('medico_id', medicoFiltro.value)
+  const { data: consultas } = await q
+
+  // minutos por (unidade, médico)
+  const chave = (u: string, m: string) => `${u}::${m}`
+  const minutosPar: Record<string, number> = {}
+  ;(consultas ?? []).forEach((c: any) => {
+    const unidadeId = c.pacientes?.unidade_id
+    if (!c.medico_id || !unidadeId) return
+    const k = chave(unidadeId, c.medico_id)
+    minutosPar[k] = (minutosPar[k] ?? 0) + (c.duracao_minutos ?? 0)
+  })
+
+  const medicosPorId: Record<string, typeof medicos.value[number]> = {}
+  medicos.value.forEach(m => { medicosPorId[m.id] = m })
+
+  const resultado: UnidadeFolha[] = []
+  for (const u of unidadesTodas.value) {
+    const linhasU: LinhaFolha[] = []
+    let totalHorasMin = 0
+    let totalFolha = 0
+    for (const m of medicos.value) {
+      if (medicoFiltro.value && m.id !== medicoFiltro.value) continue
+      const min = minutosPar[chave(u.id, m.id)] ?? 0
+      if (!min) continue
+      const valorHora = m.valor_hora ?? 0
+      const valorPagar = valorHora ? (min / 60) * valorHora : 0
+      linhasU.push({ medicoId: m.id, nome: m.nome, especialidade: m.especialidade, valorHora, horasMin: min, valorPagar })
+      totalHorasMin += min
+      totalFolha += valorPagar
+    }
+    if (linhasU.length) {
+      resultado.push({
+        unidadeId: u.id, unidadeNome: u.nome,
+        linhas: linhasU.sort((a, b) => a.nome.localeCompare(b.nome)),
+        totalHorasMin, totalFolha, qtdMedicos: linhasU.length,
+      })
+    }
+  }
+  folhaPorUnidade.value = resultado
+}
+
 // Paginação dos atendimentos detalhados
 const POR_PAGINA = 20
 const paginaDetalhe = ref(1)
@@ -245,6 +305,152 @@ async function urlParaBase64(url: string): Promise<string | null> {
   }
 }
 
+// ── Modal Folha de Pagamento ──────────────────────────────────────────────
+const folhaModalAberto = ref(false)
+const folhaCarregando = ref(false)
+const folhaUnidadeEscolhida = ref('') // '' = todas as unidades
+const folhaAgrupamento = ref<'medico' | 'especialidade'>('medico')
+const exportandoFolha = ref(false)
+
+async function abrirFolhaPagamento() {
+  folhaModalAberto.value = true
+  folhaCarregando.value = true
+  await carregarFolhaPagamento()
+  folhaCarregando.value = false
+}
+
+// Quando agrupado por especialidade, soma as linhas de todos os médicos
+// daquela especialidade numa única linha (não faz sentido comissão por
+// médico individual nessa visão — é um resumo de custo por especialidade).
+function unidadesParaExportar(): UnidadeFolha[] {
+  const base = folhaUnidadeEscolhida.value
+    ? folhaPorUnidade.value.filter(u => u.unidadeId === folhaUnidadeEscolhida.value)
+    : folhaPorUnidade.value
+
+  if (folhaAgrupamento.value === 'medico') return base
+
+  return base.map(u => {
+    const porEsp: Record<string, LinhaFolha> = {}
+    for (const l of u.linhas) {
+      const acc = porEsp[l.especialidade] ??= { medicoId: '', nome: l.especialidade, especialidade: l.especialidade, valorHora: 0, horasMin: 0, valorPagar: 0 }
+      acc.horasMin += l.horasMin
+      acc.valorPagar += l.valorPagar
+    }
+    return { ...u, linhas: Object.values(porEsp).sort((a, b) => a.nome.localeCompare(b.nome)) }
+  })
+}
+
+async function exportarFolhaPagamento() {
+  exportandoFolha.value = true
+  try {
+    const { default: pdfMake } = await import('pdfmake/build/pdfmake')
+    const { default: vfsFonts } = await import('pdfmake/build/vfs_fonts')
+    pdfMake.vfs = vfsFonts.vfs
+
+    const logoBase64 = await urlParaBase64(`${window.location.origin}/logo.png`)
+    const geradoEm = new Date().toLocaleString('pt-BR')
+    const unidadesExp = unidadesParaExportar()
+
+    const cabecalhoTabela = folhaAgrupamento.value === 'medico'
+      ? ['Médico', 'Especialidade', 'Valor/Hora', 'Horas', 'Valor a Pagar'].map(t => ({ text: t, style: 'th' }))
+      : ['Especialidade', 'Horas', 'Valor a Pagar'].map(t => ({ text: t, style: 'th' }))
+
+    const blocos: any[] = []
+    unidadesExp.forEach((u, idxU) => {
+      if (idxU > 0) blocos.push({ canvas: [{ type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 1, lineColor: '#cbd5e1' }], margin: [0, 16, 0, 16] })
+
+      blocos.push({ text: u.unidadeNome, style: 'unidadeNome' })
+      blocos.push({ text: `Período: ${periodoLabel()}`, style: 'infoLinha' })
+      blocos.push({ text: `Quantidade de médicos: ${u.qtdMedicos}`, style: 'infoLinha' })
+      blocos.push({ text: `Total de horas: ${fmtHoras(u.totalHorasMin)}`, style: 'infoLinha' })
+      blocos.push({ text: `Total da folha: ${fmtBRL(u.totalFolha)}`, style: 'infoLinha', margin: [0, 0, 0, 8] })
+
+      const corpo = folhaAgrupamento.value === 'medico'
+        ? u.linhas.map(l => [l.nome, l.especialidade, fmtBRL(l.valorHora), fmtHoras(l.horasMin), { text: fmtBRL(l.valorPagar), bold: true }])
+        : u.linhas.map(l => [l.especialidade, fmtHoras(l.horasMin), { text: fmtBRL(l.valorPagar), bold: true }])
+
+      const linhaTotal = folhaAgrupamento.value === 'medico'
+        ? [{ text: 'TOTAL DA FOLHA', colSpan: 3, bold: true }, {}, {}, { text: fmtHoras(u.totalHorasMin), bold: true }, { text: fmtBRL(u.totalFolha), bold: true, color: '#16a34a' }]
+        : [{ text: 'TOTAL DA FOLHA', bold: true }, { text: fmtHoras(u.totalHorasMin), bold: true }, { text: fmtBRL(u.totalFolha), bold: true, color: '#16a34a' }]
+
+      blocos.push({
+        table: {
+          headerRows: 1,
+          widths: folhaAgrupamento.value === 'medico' ? ['*', 'auto', 'auto', 'auto', 'auto'] : ['*', 'auto', 'auto'],
+          body: [cabecalhoTabela, ...corpo, linhaTotal],
+        },
+        layout: {
+          fillColor: (i: number) => (i === 0 ? '#eff6ff' : null),
+          hLineColor: () => '#e2e8f0',
+          vLineWidth: () => 0,
+          hLineWidth: (i: number) => (i === 1 ? 1 : 0.5),
+        },
+      })
+    })
+
+    if (!blocos.length) {
+      blocos.push({ text: 'Nenhum médico trabalhou no período selecionado.', italics: true, color: '#94a3b8' })
+    }
+
+    const docDef = {
+      pageMargins: [40, 90, 40, 60] as [number, number, number, number],
+      header: {
+        margin: [40, 24, 40, 0],
+        stack: [
+          {
+            columns: [
+              ...(logoBase64 ? [{ image: logoBase64, width: 90 } as unknown] : []),
+              {
+                width: '*',
+                stack: [
+                  { text: 'Central SóMedicos', style: 'clinica', alignment: 'right' },
+                  { text: 'Folha de Pagamento — Médicos', style: 'clinicaSub', alignment: 'right' },
+                ],
+              },
+            ],
+          },
+          { canvas: [{ type: 'line', x1: 0, y1: 8, x2: 515, y2: 8, lineWidth: 1.2, lineColor: '#2563eb' }] },
+        ],
+      },
+      footer: (currentPage: number, pageCount: number) => ({
+        margin: [40, 8, 40, 0],
+        stack: [
+          { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 0.5, lineColor: '#94a3b8' }] },
+          {
+            columns: [
+              { text: 'Central SóMedicos', style: 'rodape' },
+              { text: `Gerado em ${geradoEm}`, style: 'rodape', alignment: 'center' },
+              { text: `Página ${currentPage} de ${pageCount}`, style: 'rodape', alignment: 'right' },
+            ],
+          },
+        ],
+      }),
+      content: [
+        { text: 'Folha de Pagamento — Médicos', style: 'titulo' },
+        { text: folhaUnidadeEscolhida.value ? (unidadesTodas.value.find(u => u.id === folhaUnidadeEscolhida.value)?.nome ?? '') : 'Todas as unidades', style: 'subtitulo' },
+        '\n',
+        ...blocos,
+      ],
+      styles: {
+        clinica: { fontSize: 16, bold: true, color: '#2563eb', margin: [0, 0, 0, 2] },
+        clinicaSub: { fontSize: 9, color: '#64748b' },
+        titulo: { fontSize: 16, bold: true, color: '#0f172a' },
+        subtitulo: { fontSize: 10, color: '#64748b', margin: [0, 2, 0, 0] },
+        unidadeNome: { fontSize: 13, bold: true, color: '#0f172a', margin: [0, 0, 0, 4] },
+        infoLinha: { fontSize: 9, color: '#475569' },
+        th: { bold: true, fontSize: 9, color: '#1d4ed8' },
+        rodape: { fontSize: 8, color: '#94a3b8' },
+      },
+      defaultStyle: { fontSize: 9, lineHeight: 1.3 },
+    }
+
+    const escopo = folhaUnidadeEscolhida.value ? 'unidade' : 'todas'
+    pdfMake.createPdf(docDef as any).download(`folha_pagamento_${escopo}_${dataIni.value}_${dataFim.value}.pdf`)
+  } finally {
+    exportandoFolha.value = false
+  }
+}
+
 const exportandoPDF = ref(false)
 async function exportarPDF() {
   exportandoPDF.value = true
@@ -399,6 +605,9 @@ async function exportarExcel() {
         <p class="text-[var(--color-text-muted)] text-sm mt-1">Receita por médico com base nas consultas realizadas</p>
       </div>
       <div class="flex flex-wrap gap-2">
+        <UiButton variant="primary" size="sm" @click="abrirFolhaPagamento">
+          <DollarSign :size="15" /> Gerar Folha de Pagamento
+        </UiButton>
         <UiButton variant="secondary" size="sm" :loading="exportandoPDF" @click="exportarPDF">
           <FileText :size="15" /> Exportar PDF
         </UiButton>
@@ -717,5 +926,62 @@ async function exportarExcel() {
         </div>
       </div>
     </template>
+
+    <!-- Modal Folha de Pagamento -->
+    <UiModal v-if="folhaModalAberto" :model-value="true" title="Gerar Folha de Pagamento" size="lg" @update:model-value="folhaModalAberto = false">
+      <div class="space-y-4">
+        <p class="text-sm" style="color:var(--color-text-muted)">
+          Período: <strong>{{ periodoLabel() }}</strong> — vem todos os médicos que trabalharam em cada unidade, com quebra de página/seção entre uma unidade e outra na mesma folha.
+        </p>
+
+        <div>
+          <label class="text-xs font-semibold uppercase tracking-wide mb-1.5 block" style="color:var(--color-text-muted)">Unidade</label>
+          <select v-model="folhaUnidadeEscolhida" class="input-base py-2 text-sm">
+            <option value="">Todas as unidades</option>
+            <option v-for="u in unidadesTodas" :key="u.id" :value="u.id">{{ u.nome }}</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="text-xs font-semibold uppercase tracking-wide mb-1.5 block" style="color:var(--color-text-muted)">Agrupamento</label>
+          <div class="flex gap-2">
+            <button
+              class="flex-1 px-3 py-2 rounded-lg text-sm font-semibold border transition-all"
+              :style="folhaAgrupamento === 'medico' ? 'background:#2563eb;color:white;border-color:#2563eb' : 'background:white;color:var(--color-text-muted);border-color:var(--color-border)'"
+              @click="folhaAgrupamento = 'medico'"
+            >Por médico</button>
+            <button
+              class="flex-1 px-3 py-2 rounded-lg text-sm font-semibold border transition-all"
+              :style="folhaAgrupamento === 'especialidade' ? 'background:#2563eb;color:white;border-color:#2563eb' : 'background:white;color:var(--color-text-muted);border-color:var(--color-border)'"
+              @click="folhaAgrupamento = 'especialidade'"
+            >Por especialidade</button>
+          </div>
+        </div>
+
+        <div v-if="folhaCarregando" class="py-8 text-center">
+          <div class="inline-block w-6 h-6 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+        </div>
+
+        <div v-else-if="!unidadesParaExportar().length" class="py-8 text-center text-sm" style="color:var(--color-text-dim)">
+          Nenhum médico com horas registradas nesse período{{ folhaUnidadeEscolhida ? ' nessa unidade' : '' }}.
+        </div>
+
+        <!-- Pré-visualização -->
+        <div v-else class="space-y-4 max-h-[45vh] overflow-y-auto pr-1">
+          <div v-for="u in unidadesParaExportar()" :key="u.unidadeId" class="rounded-xl border p-3" style="border-color:var(--color-border)">
+            <p class="font-bold text-sm text-[var(--color-text)]">{{ u.unidadeNome }}</p>
+            <p class="text-xs mt-0.5" style="color:var(--color-text-muted)">
+              {{ u.qtdMedicos }} médico{{ u.qtdMedicos !== 1 ? 's' : '' }} · {{ fmtHoras(u.totalHorasMin) }} · <strong style="color:#16a34a">{{ fmtBRL(u.totalFolha) }}</strong>
+            </p>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <UiButton variant="ghost" @click="folhaModalAberto = false">Cancelar</UiButton>
+        <UiButton variant="primary" :loading="exportandoFolha" :disabled="folhaCarregando || !unidadesParaExportar().length" @click="exportarFolhaPagamento">
+          <FileText :size="15" /> Baixar PDF
+        </UiButton>
+      </template>
+    </UiModal>
   </div>
 </template>
