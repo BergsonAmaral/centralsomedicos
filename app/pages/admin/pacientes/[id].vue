@@ -94,6 +94,39 @@ const agendamentosFiltrados = computed(() => {
   })
 })
 
+// Agrupa por dia da consulta — mais fácil de ler o histórico assim do que
+// numa lista corrida, ainda mais pra paciente com muitas consultas.
+const agendamentosPorDia = computed(() => {
+  const grupos: Record<string, Agendamento[]> = {}
+  for (const a of agendamentosFiltrados.value) {
+    (grupos[a.data_consulta] ??= []).push(a)
+  }
+  return Object.entries(grupos).sort(([a], [b]) => b.localeCompare(a))
+})
+
+function fmtDiaGrupo(data: string): string {
+  const d = new Date(data + 'T12:00:00')
+  const hoje = dataLocal(0)
+  const ontem = dataLocal(-1)
+  if (data === hoje) return 'Hoje'
+  if (data === ontem) return 'Ontem'
+  return d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
+}
+
+// Documentos: mesma ideia — filtro por tipo + agrupado por dia de emissão
+const filtroTipoDoc = ref('')
+const documentosFiltrados = computed(() =>
+  filtroTipoDoc.value ? documentos.value.filter((d) => d.tipo === filtroTipoDoc.value) : documentos.value
+)
+const documentosPorDia = computed(() => {
+  const grupos: Record<string, Documento[]> = {}
+  for (const d of documentosFiltrados.value) {
+    const dia = d.created_at.slice(0, 10)
+    ;(grupos[dia] ??= []).push(d)
+  }
+  return Object.entries(grupos).sort(([a], [b]) => b.localeCompare(a))
+})
+
 const stats = computed(() => {
   const lista = agendamentos.value
   return {
@@ -348,47 +381,51 @@ const TIPOS_LABELS: Record<string, string> = {
         <div v-if="agendamentosFiltrados.length === 0" class="py-6 text-center text-[var(--color-text-dim)] text-sm">
           Nenhum agendamento encontrado.
         </div>
-        <div v-else class="space-y-2">
-          <div
-            v-for="ag in agendamentosFiltrados"
-            :key="ag.id"
-            class="flex items-center justify-between p-3 rounded-lg border border-[var(--color-border-light)] hover:bg-[var(--color-surface-2)]"
-          >
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-2 flex-wrap">
-                <p class="text-sm font-semibold text-[var(--color-text)]">
-                  {{ new Date(ag.data_consulta + 'T12:00:00').toLocaleDateString('pt-BR') }}
-                </p>
-                <UiBadge :variant="ag.status as any" />
-              </div>
-              <p class="text-xs text-[var(--color-text-muted)] mt-0.5">
-                {{ (ag.medicos as any)?.nome }}
-                <span v-if="(ag.medicos as any)?.especialidade">
-                  · {{ (ag.medicos as any).especialidade }}
-                </span>
-              </p>
-              <p v-if="ag.motivo" class="text-xs text-[var(--color-text-dim)] mt-0.5">{{ ag.motivo }}</p>
-              <div v-if="consultaPorAgendamento[ag.id]?.evolucao" class="mt-1.5 p-2 rounded-lg text-xs" style="background:#f0f9ff;border:1px solid #bae6fd;color:#075985">
-                <p class="font-semibold uppercase tracking-wide text-[10px] mb-0.5">Prontuário</p>
-                {{ consultaPorAgendamento[ag.id]?.evolucao }}
-              </div>
-            </div>
-            <div class="flex items-center gap-1 shrink-0 ml-2">
-              <button
-                class="p-1.5 rounded-lg hover:bg-blue-50 transition-colors"
-                title="Editar agendamento"
-                @click="abrirEditAg(ag)"
+        <div v-else class="space-y-4">
+          <div v-for="[dia, itens] in agendamentosPorDia" :key="dia">
+            <p class="text-xs font-bold uppercase tracking-wide mb-2" style="color:var(--color-text-dim)">
+              {{ fmtDiaGrupo(dia) }} <span class="font-normal normal-case">({{ itens.length }})</span>
+            </p>
+            <div class="space-y-2">
+              <div
+                v-for="ag in itens"
+                :key="ag.id"
+                class="flex items-center justify-between p-3 rounded-lg border border-[var(--color-border-light)] hover:bg-[var(--color-surface-2)]"
               >
-                <Pencil :size="14" style="color:#2563eb" />
-              </button>
-              <button
-                v-if="!['cancelado','concluido','faltou'].includes(ag.status)"
-                class="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
-                title="Cancelar agendamento"
-                @click="cancelarAgendamento(ag)"
-              >
-                <XIcon :size="14" style="color:#dc2626" />
-              </button>
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <UiBadge :variant="ag.status as any" />
+                  </div>
+                  <p class="text-xs text-[var(--color-text-muted)] mt-0.5">
+                    {{ (ag.medicos as any)?.nome }}
+                    <span v-if="(ag.medicos as any)?.especialidade">
+                      · {{ (ag.medicos as any).especialidade }}
+                    </span>
+                  </p>
+                  <p v-if="ag.motivo" class="text-xs text-[var(--color-text-dim)] mt-0.5">{{ ag.motivo }}</p>
+                  <div v-if="consultaPorAgendamento[ag.id]?.evolucao" class="mt-1.5 p-2 rounded-lg text-xs" style="background:#f0f9ff;border:1px solid #bae6fd;color:#075985">
+                    <p class="font-semibold uppercase tracking-wide text-[10px] mb-0.5">Prontuário</p>
+                    {{ consultaPorAgendamento[ag.id]?.evolucao }}
+                  </div>
+                </div>
+                <div class="flex items-center gap-1 shrink-0 ml-2">
+                  <button
+                    class="p-1.5 rounded-lg hover:bg-blue-50 transition-colors"
+                    title="Editar agendamento"
+                    @click="abrirEditAg(ag)"
+                  >
+                    <Pencil :size="14" style="color:#2563eb" />
+                  </button>
+                  <button
+                    v-if="!['cancelado','concluido','faltou'].includes(ag.status)"
+                    class="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                    title="Cancelar agendamento"
+                    @click="cancelarAgendamento(ag)"
+                  >
+                    <XIcon :size="14" style="color:#dc2626" />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -399,22 +436,36 @@ const TIPOS_LABELS: Record<string, string> = {
         <template #header>
           <h3 class="font-semibold">Documentos Emitidos</h3>
         </template>
-        <div v-if="documentos.length === 0" class="py-6 text-center text-[var(--color-text-dim)] text-sm">
+        <div class="mb-3">
+          <label class="text-xs font-medium text-[var(--color-text-muted)] block mb-1">Tipo</label>
+          <select v-model="filtroTipoDoc" class="input-base py-2 text-sm max-w-xs">
+            <option value="">Todos</option>
+            <option v-for="(label, key) in TIPOS_LABELS" :key="key" :value="key">{{ label }}</option>
+          </select>
+        </div>
+        <div v-if="documentosFiltrados.length === 0" class="py-6 text-center text-[var(--color-text-dim)] text-sm">
           Nenhum documento emitido
         </div>
-        <div v-else class="space-y-2">
-          <div
-            v-for="doc in documentos"
-            :key="doc.id"
-            class="flex items-center justify-between p-3 rounded-lg border border-[var(--color-border-light)]"
-          >
-            <div>
-              <p class="text-sm font-medium text-[var(--color-text)]">{{ TIPOS_LABELS[doc.tipo] ?? doc.tipo }}</p>
-              <p class="text-xs text-[var(--color-text-muted)]">
-                {{ new Date(doc.created_at).toLocaleDateString('pt-BR') }} — {{ (doc.medicos as any)?.nome }}
-              </p>
+        <div v-else class="space-y-4">
+          <div v-for="[dia, itens] in documentosPorDia" :key="dia">
+            <p class="text-xs font-bold uppercase tracking-wide mb-2" style="color:var(--color-text-dim)">
+              {{ fmtDiaGrupo(dia) }} <span class="font-normal normal-case">({{ itens.length }})</span>
+            </p>
+            <div class="space-y-2">
+              <div
+                v-for="doc in itens"
+                :key="doc.id"
+                class="flex items-center justify-between p-3 rounded-lg border border-[var(--color-border-light)]"
+              >
+                <div>
+                  <p class="text-sm font-medium text-[var(--color-text)]">{{ TIPOS_LABELS[doc.tipo] ?? doc.tipo }}</p>
+                  <p class="text-xs text-[var(--color-text-muted)]">
+                    {{ new Date(doc.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) }} — {{ (doc.medicos as any)?.nome }}
+                  </p>
+                </div>
+                <UiButton v-if="doc.pdf_url" variant="ghost" size="sm" @click="abrirDocumento(doc.pdf_url)">Ver PDF</UiButton>
+              </div>
             </div>
-            <UiButton v-if="doc.pdf_url" variant="ghost" size="sm" @click="abrirDocumento(doc.pdf_url)">Ver PDF</UiButton>
           </div>
         </div>
       </UiCard>
