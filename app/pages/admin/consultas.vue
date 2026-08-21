@@ -104,6 +104,80 @@ const periodoAtivo = computed(() => {
   return ''
 })
 
+// ── Calendário — escolher um dia específico em vez de digitar um período ──
+const calendarioAberto = ref(false)
+const mesVisivel = ref(new Date())
+const diasComConsulta = ref<Set<string>>(new Set())
+
+// Dia único selecionado só quando início === fim (senão é um período livre,
+// não faz sentido marcar um dia só no calendário)
+const diaSelecionado = computed(() =>
+  filtroDataInicio.value && filtroDataInicio.value === filtroDataFim.value ? filtroDataInicio.value : ''
+)
+
+function fmtDataYMD(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+async function carregarDiasComConsulta() {
+  const ano = mesVisivel.value.getFullYear()
+  const mes = mesVisivel.value.getMonth()
+  const inicio = fmtDataYMD(new Date(ano, mes, 1))
+  const fim = fmtDataYMD(new Date(ano, mes + 1, 0))
+  let q = supabase.from('agendamentos').select('data_consulta').gte('data_consulta', inicio).lte('data_consulta', fim)
+  if (filtroMedico.value) q = q.eq('medico_id', filtroMedico.value)
+  const { data } = await q
+  diasComConsulta.value = new Set((data ?? []).map((a: any) => a.data_consulta as string))
+}
+
+watch([calendarioAberto, mesVisivel, filtroMedico], () => {
+  if (calendarioAberto.value) carregarDiasComConsulta()
+})
+
+const diasDoMes = computed(() => {
+  const ano = mesVisivel.value.getFullYear()
+  const mes = mesVisivel.value.getMonth()
+  const primeiroDiaSemana = new Date(ano, mes, 1).getDay()
+  const totalDias = new Date(ano, mes + 1, 0).getDate()
+  const dias: { data: string; numero: number; foraDoMes: boolean }[] = []
+  // Preenche os dias do mês anterior pra completar a primeira semana
+  for (let i = 0; i < primeiroDiaSemana; i++) {
+    const d = new Date(ano, mes, i - primeiroDiaSemana + 1)
+    dias.push({ data: fmtDataYMD(d), numero: d.getDate(), foraDoMes: true })
+  }
+  for (let dia = 1; dia <= totalDias; dia++) {
+    dias.push({ data: fmtDataYMD(new Date(ano, mes, dia)), numero: dia, foraDoMes: false })
+  }
+  // Completa a última semana
+  while (dias.length % 7 !== 0) {
+    const anterior = dias[dias.length - 1]
+    if (!anterior) break
+    const ultimo = new Date(anterior.data + 'T12:00:00')
+    ultimo.setDate(ultimo.getDate() + 1)
+    dias.push({ data: fmtDataYMD(ultimo), numero: ultimo.getDate(), foraDoMes: true })
+  }
+  return dias
+})
+
+const nomeMesVisivel = computed(() =>
+  mesVisivel.value.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+)
+
+function mudarMes(delta: number) {
+  mesVisivel.value = new Date(mesVisivel.value.getFullYear(), mesVisivel.value.getMonth() + delta, 1)
+}
+
+function escolherDia(data: string) {
+  filtroDataInicio.value = data
+  filtroDataFim.value = data
+  calendarioAberto.value = false
+}
+
+function abrirCalendario() {
+  mesVisivel.value = diaSelecionado.value ? new Date(diaSelecionado.value + 'T12:00:00') : new Date()
+  calendarioAberto.value = !calendarioAberto.value
+}
+
 // Nova consulta
 const novoModal = ref(false)
 const novoForm = ref({ paciente_busca: '', medico_id: '', data_consulta: '', motivo: '' })
@@ -296,10 +370,67 @@ const paginasVisiveis = computed(() => {
             : 'background:white;color:var(--color-text-muted);border-color:var(--color-border)'"
           @click="definirPeriodo(p.v as any)"
         >{{ p.l }}</button>
-        <div class="flex items-center gap-1.5 ml-auto">
+        <div class="flex items-center gap-1.5 ml-auto relative">
+          <button
+            type="button"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all"
+            :style="diaSelecionado
+              ? 'background:#2563eb;color:white;border-color:#2563eb'
+              : 'background:white;color:var(--color-text-muted);border-color:var(--color-border)'"
+            @click="abrirCalendario"
+          >
+            <CalendarDays :size="13" />
+            {{ diaSelecionado ? new Date(diaSelecionado + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Escolher dia' }}
+          </button>
           <input v-model="filtroDataInicio" type="date" class="rounded-xl border px-3 py-1.5 text-xs outline-none" style="border-color:var(--color-border);background:var(--color-surface-2)" />
           <span class="text-xs" style="color:var(--color-text-dim)">até</span>
           <input v-model="filtroDataFim" type="date" class="rounded-xl border px-3 py-1.5 text-xs outline-none" style="border-color:var(--color-border);background:var(--color-surface-2)" />
+
+          <!-- Calendário -->
+          <div
+            v-if="calendarioAberto"
+            class="absolute right-0 top-full mt-2 z-20 bg-white rounded-2xl border shadow-lg p-3"
+            style="border-color:var(--color-border);width:280px"
+          >
+            <div class="flex items-center justify-between mb-2">
+              <button type="button" class="p-1.5 rounded-lg hover:bg-[var(--color-surface-2)]" @click="mudarMes(-1)">
+                <ChevronLeft :size="16" />
+              </button>
+              <p class="text-sm font-semibold capitalize" style="color:var(--color-text)">{{ nomeMesVisivel }}</p>
+              <button type="button" class="p-1.5 rounded-lg hover:bg-[var(--color-surface-2)]" style="transform:scaleX(-1)" @click="mudarMes(1)">
+                <ChevronLeft :size="16" />
+              </button>
+            </div>
+            <div class="grid grid-cols-7 gap-1 mb-1">
+              <span v-for="d in ['D','S','T','Q','Q','S','S']" :key="d" class="text-center text-[10px] font-bold" style="color:var(--color-text-dim)">{{ d }}</span>
+            </div>
+            <div class="grid grid-cols-7 gap-1">
+              <button
+                v-for="d in diasDoMes" :key="d.data"
+                type="button"
+                class="relative aspect-square rounded-lg text-xs font-medium transition-colors"
+                :disabled="d.foraDoMes"
+                :style="[
+                  d.foraDoMes ? 'color:var(--color-text-dim);opacity:0.35' : 'color:var(--color-text)',
+                  d.data === diaSelecionado ? 'background:#2563eb;color:white;font-weight:700' : d.data === dataLocal(0) ? 'background:var(--color-surface-2);font-weight:700' : '',
+                ]"
+                @click="!d.foraDoMes && escolherDia(d.data)"
+              >
+                {{ d.numero }}
+                <span
+                  v-if="diasComConsulta.has(d.data) && d.data !== diaSelecionado"
+                  class="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full"
+                  style="background:#16a34a"
+                />
+              </button>
+            </div>
+            <button
+              type="button"
+              class="w-full mt-2 py-1.5 rounded-lg text-xs font-semibold"
+              style="background:var(--color-surface-2);color:var(--color-text-muted)"
+              @click="escolherDia(dataLocal(0))"
+            >Hoje</button>
+          </div>
         </div>
       </div>
 
