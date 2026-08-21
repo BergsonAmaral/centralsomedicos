@@ -435,21 +435,16 @@ const paginasVisiveis = computed(() => {
       </div>
 
       <!-- Status -->
-      <div class="flex flex-wrap gap-2 items-center">
-        <Filter :size="13" style="color:var(--color-text-dim)" />
-        <span class="text-xs font-semibold shrink-0" style="color:var(--color-text-muted)">Status:</span>
-        <button
-          class="px-3 py-1 rounded-full text-xs font-semibold border transition-all"
-          :style="filtroStatus === '' ? 'background:#2563eb;color:white;border-color:#2563eb' : 'background:white;color:var(--color-text-muted);border-color:var(--color-border)'"
-          @click="filtroStatus = ''"
-        >Todos</button>
-        <button
-          v-for="(label, key) in STATUS_LABELS"
-          :key="key"
-          class="px-3 py-1 rounded-full text-xs font-semibold border transition-all"
-          :style="filtroStatus === key ? 'background:#2563eb;color:white;border-color:#2563eb' : 'background:white;color:var(--color-text-muted);border-color:var(--color-border)'"
-          @click="filtroStatus = filtroStatus === key ? '' : key as AgendamentoStatus"
-        >{{ label }}</button>
+      <div class="relative max-w-xs">
+        <select
+          v-model="filtroStatus"
+          class="w-full pl-9 pr-8 py-2.5 rounded-xl border text-sm outline-none appearance-none cursor-pointer"
+          style="border-color:var(--color-border);background:var(--color-surface-2);color:var(--color-text)"
+        >
+          <option value="">Todos os status</option>
+          <option v-for="(label, key) in STATUS_LABELS" :key="key" :value="key">{{ label }}</option>
+        </select>
+        <Filter :size="13" class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style="color:var(--color-text-dim)" />
       </div>
     </div>
 

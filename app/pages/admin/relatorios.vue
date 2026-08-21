@@ -268,19 +268,15 @@ function exportarCSV() {
             <input v-model="cDataFim" type="date" class="rounded-xl border px-3 py-1.5 text-xs outline-none" style="border-color:var(--color-border);background:var(--color-surface-2)" />
           </div>
         </div>
-        <div class="flex flex-wrap gap-2 items-center">
-          <span class="text-xs font-semibold shrink-0" style="color:var(--color-text-muted)">Médico:</span>
-          <button
-            class="px-3 py-1 rounded-full text-xs font-semibold border transition-all"
-            :style="cMedico === '' ? 'background:#2563eb;color:white;border-color:#2563eb' : 'background:white;color:var(--color-text-muted);border-color:var(--color-border)'"
-            @click="cMedico = ''"
-          >Todos</button>
-          <button
-            v-for="m in medicos" :key="m.id"
-            class="px-3 py-1 rounded-full text-xs font-semibold border transition-all"
-            :style="cMedico === m.id ? 'background:#2563eb;color:white;border-color:#2563eb' : 'background:white;color:var(--color-text-muted);border-color:var(--color-border)'"
-            @click="cMedico = m.id"
-          >{{ m.nome }}</button>
+        <div class="relative max-w-xs">
+          <select
+            v-model="cMedico"
+            class="w-full pl-4 pr-8 py-2.5 rounded-xl border text-sm outline-none appearance-none cursor-pointer"
+            style="border-color:var(--color-border);background:var(--color-surface-2);color:var(--color-text)"
+          >
+            <option value="">Todos os médicos</option>
+            <option v-for="m in medicos" :key="m.id" :value="m.id">{{ m.nome }}</option>
+          </select>
         </div>
       </div>
 
@@ -390,35 +386,37 @@ function exportarCSV() {
             <input v-model="dDataFim" type="date" class="rounded-xl border px-3 py-1.5 text-xs outline-none" style="border-color:var(--color-border);background:var(--color-surface-2)" />
           </div>
         </div>
-        <!-- Médico -->
-        <div class="flex flex-wrap gap-2 items-center">
-          <span class="text-xs font-semibold shrink-0" style="color:var(--color-text-muted)">Médico:</span>
-          <button class="px-3 py-1 rounded-full text-xs font-semibold border transition-all"
-            :style="dMedico === '' ? 'background:#2563eb;color:white;border-color:#2563eb' : 'background:white;color:var(--color-text-muted);border-color:var(--color-border)'"
-            @click="dMedico = ''">Todos</button>
-          <button v-for="m in medicos" :key="m.id" class="px-3 py-1 rounded-full text-xs font-semibold border transition-all"
-            :style="dMedico === m.id ? 'background:#2563eb;color:white;border-color:#2563eb' : 'background:white;color:var(--color-text-muted);border-color:var(--color-border)'"
-            @click="dMedico = m.id">{{ m.nome }}</button>
-        </div>
-        <!-- Tipo -->
-        <div class="flex flex-wrap gap-2 items-center">
-          <span class="inline-flex items-center gap-1 text-xs font-semibold shrink-0" style="color:var(--color-text-muted)">
-            <Filter :size="12" /> Tipo:
-          </span>
-          <button class="px-3 py-1 rounded-full text-xs font-semibold border transition-all"
-            :style="dTipo === '' ? 'background:#2563eb;color:white;border-color:#2563eb' : 'background:white;color:var(--color-text-muted);border-color:var(--color-border)'"
-            @click="dTipo = ''">Todos</button>
-          <button v-for="(label, key) in TIPOS_LABELS" :key="key" class="px-3 py-1 rounded-full text-xs font-semibold border transition-all"
-            :style="dTipo === key ? `background:${TIPOS_CORES[key]};color:white;border-color:${TIPOS_CORES[key]}` : 'background:white;color:var(--color-text-muted);border-color:var(--color-border)'"
-            @click="dTipo = key">{{ label }}</button>
-        </div>
-        <!-- Status -->
-        <div class="flex flex-wrap gap-2 items-center">
-          <span class="text-xs font-semibold shrink-0" style="color:var(--color-text-muted)">Status:</span>
-          <button v-for="op in [{ v: '', l: 'Todos', bg: '#2563eb' }, { v: 'gerado', l: 'Gerado', bg: '#d97706' }, { v: 'enviado_paciente', l: 'Enviado', bg: '#16a34a' }, { v: 'arquivado', l: 'Arquivado', bg: '#64748b' }]"
-            :key="op.v" class="px-3 py-1 rounded-full text-xs font-semibold border transition-all"
-            :style="dStatus === op.v ? `background:${op.bg};color:white;border-color:${op.bg}` : 'background:white;color:var(--color-text-muted);border-color:var(--color-border)'"
-            @click="dStatus = op.v">{{ op.l }}</button>
+        <!-- Médico / Tipo / Status -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <select
+            v-model="dMedico"
+            class="w-full pl-4 pr-8 py-2.5 rounded-xl border text-sm outline-none appearance-none cursor-pointer"
+            style="border-color:var(--color-border);background:var(--color-surface-2);color:var(--color-text)"
+          >
+            <option value="">Todos os médicos</option>
+            <option v-for="m in medicos" :key="m.id" :value="m.id">{{ m.nome }}</option>
+          </select>
+          <div class="relative">
+            <select
+              v-model="dTipo"
+              class="w-full pl-9 pr-8 py-2.5 rounded-xl border text-sm outline-none appearance-none cursor-pointer"
+              style="border-color:var(--color-border);background:var(--color-surface-2);color:var(--color-text)"
+            >
+              <option value="">Todos os tipos</option>
+              <option v-for="(label, key) in TIPOS_LABELS" :key="key" :value="key">{{ label }}</option>
+            </select>
+            <Filter :size="12" class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style="color:var(--color-text-dim)" />
+          </div>
+          <select
+            v-model="dStatus"
+            class="w-full pl-4 pr-8 py-2.5 rounded-xl border text-sm outline-none appearance-none cursor-pointer"
+            style="border-color:var(--color-border);background:var(--color-surface-2);color:var(--color-text)"
+          >
+            <option value="">Todos os status</option>
+            <option value="gerado">Gerado</option>
+            <option value="enviado_paciente">Enviado</option>
+            <option value="arquivado">Arquivado</option>
+          </select>
         </div>
       </div>
 

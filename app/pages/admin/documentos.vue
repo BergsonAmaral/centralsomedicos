@@ -390,45 +390,38 @@ const paginasVisiveis = computed(() => {
         </div>
       </div>
 
-      <!-- Linha 3: tipo (chips) -->
-      <div class="flex flex-wrap gap-2 items-center">
-        <span class="inline-flex items-center gap-1 text-xs font-semibold shrink-0" style="color:var(--color-text-muted)">
-          <Filter :size="13" /> Tipo:
-        </span>
-        <button
-          class="px-3 py-1 rounded-full text-xs font-semibold border transition-all"
-          :style="filtroTipo === ''
-            ? 'background:#2563eb;color:white;border-color:#2563eb'
-            : 'background:white;color:var(--color-text-muted);border-color:var(--color-border)'"
-          @click="filtroTipo = ''"
-        >Todos</button>
-        <button
-          v-for="(label, key) in TIPOS_LABELS"
-          :key="key"
-          class="px-3 py-1 rounded-full text-xs font-semibold border transition-all"
-          :style="filtroTipo === key
-            ? `background:${TIPOS_CORES[key]};color:white;border-color:${TIPOS_CORES[key]}`
-            : 'background:white;color:var(--color-text-muted);border-color:var(--color-border)'"
-          @click="filtroTipo = key"
-        >{{ label }}</button>
+      <!-- Linha 3: tipo + status (dropdowns compactos) -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="relative">
+          <select
+            v-model="filtroTipo"
+            class="w-full pl-9 pr-8 py-2.5 rounded-xl border text-sm outline-none appearance-none cursor-pointer"
+            style="border-color:var(--color-border);background:var(--color-surface-2);color:var(--color-text)"
+          >
+            <option value="">Todos os tipos</option>
+            <option v-for="(label, key) in TIPOS_LABELS" :key="key" :value="key">{{ label }}</option>
+          </select>
+          <Filter :size="13" class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style="color:var(--color-text-dim)" />
+          <ChevronLeft :size="14" class="absolute right-3 top-1/2 -translate-y-1/2 rotate-[-90deg] pointer-events-none" style="color:var(--color-text-dim)" />
+        </div>
+        <div class="relative">
+          <select
+            v-model="filtroStatus"
+            class="w-full pl-4 pr-8 py-2.5 rounded-xl border text-sm outline-none appearance-none cursor-pointer"
+            style="border-color:var(--color-border);background:var(--color-surface-2);color:var(--color-text)"
+          >
+            <option value="">Todos os status</option>
+            <option value="gerado">Gerado</option>
+            <option value="enviado_paciente">Enviado</option>
+            <option value="arquivado">Arquivado</option>
+          </select>
+          <ChevronLeft :size="14" class="absolute right-3 top-1/2 -translate-y-1/2 rotate-[-90deg] pointer-events-none" style="color:var(--color-text-dim)" />
+        </div>
       </div>
 
-      <!-- Linha 4: status + limpar -->
-      <div class="flex flex-wrap gap-2 items-center">
-        <span class="text-xs font-semibold shrink-0" style="color:var(--color-text-muted)">Status:</span>
+      <div v-if="temFiltroAtivo" class="flex justify-end">
         <button
-          v-for="op in [{ v: '', l: 'Todos', bg: '#2563eb' }, { v: 'gerado', l: 'Gerado', bg: '#d97706' }, { v: 'enviado_paciente', l: 'Enviado', bg: '#16a34a' }, { v: 'arquivado', l: 'Arquivado', bg: '#64748b' }]"
-          :key="op.v"
-          class="px-3 py-1 rounded-full text-xs font-semibold border transition-all"
-          :style="filtroStatus === op.v
-            ? `background:${op.bg};color:white;border-color:${op.bg}`
-            : 'background:white;color:var(--color-text-muted);border-color:var(--color-border)'"
-          @click="filtroStatus = op.v"
-        >{{ op.l }}</button>
-
-        <button
-          v-if="temFiltroAtivo"
-          class="px-3 py-1 rounded-full text-xs font-semibold ml-auto"
+          class="px-3 py-1 rounded-full text-xs font-semibold"
           style="color:#ef4444;background:#fef2f2;border:1px solid #fecaca"
           @click="limparFiltros"
         >✕ Limpar filtros</button>
