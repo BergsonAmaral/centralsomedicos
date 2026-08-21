@@ -183,6 +183,7 @@ export interface Documento {
   pacientes?: Paciente
   medicos?: Medico
   consultas?: Consulta
+  agendamentos?: Pick<Agendamento, 'chamado_em' | 'horario'>
 }
 
 // =============================================

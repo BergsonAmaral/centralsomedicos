@@ -52,10 +52,9 @@ const medicos = ref<{ id: string; nome: string }[]>([])
 
 // Funil
 const funil = ref({ gerado: 0, enviado_paciente: 0, arquivado: 0, total: 0 })
-const funilPorTipo = ref<Record<string, number>>({})
 
 async function carregarFunil() {
-  const { data } = await supabase.from('documentos').select('status, tipo')
+  const { data } = await supabase.from('documentos').select('status')
   const lista = data ?? []
   funil.value = {
     gerado: lista.filter(d => d.status === 'gerado').length,
@@ -63,9 +62,6 @@ async function carregarFunil() {
     arquivado: lista.filter(d => d.status === 'arquivado').length,
     total: lista.length,
   }
-  const porTipo: Record<string, number> = {}
-  lista.forEach(d => { porTipo[d.tipo] = (porTipo[d.tipo] ?? 0) + 1 })
-  funilPorTipo.value = porTipo
 }
 
 const POR_PAGINA = 20
@@ -78,7 +74,7 @@ async function carregar() {
 
   let q = supabase
     .from('documentos')
-    .select('*, pacientes(nome, telefone, email), medicos(nome)', { count: 'exact' })
+    .select('*, pacientes(nome, telefone, email), medicos(nome), agendamentos(chamado_em, horario)', { count: 'exact' })
 
   if (filtroMedico.value) q = q.eq('medico_id', filtroMedico.value)
   if (filtroTipo.value) q = q.eq('tipo', filtroTipo.value)
@@ -167,6 +163,24 @@ function definirPeriodo(periodo: 'hoje' | '7dias' | '30dias' | 'mes') {
   else if (periodo === '7dias') filtroDataInicio.value = dataLocal(-6)
   else if (periodo === '30dias') filtroDataInicio.value = dataLocal(-29)
   else if (periodo === 'mes') filtroDataInicio.value = primeiroDiaDoMes()
+}
+
+// Calendário — escolher um dia específico em vez de digitar um período
+const diaEscolhido = computed(() =>
+  filtroDataInicio.value && filtroDataInicio.value === filtroDataFim.value ? filtroDataInicio.value : ''
+)
+function escolherDiaCalendario(dia: string) {
+  filtroDataInicio.value = dia
+  filtroDataFim.value = dia
+}
+const diasComDocumentos = ref<Set<string>>(new Set())
+async function carregarDiasComDocumentos({ inicio, fim }: { inicio: string; fim: string }) {
+  const { data } = await supabase
+    .from('documentos')
+    .select('created_at')
+    .gte('created_at', `${inicio}T00:00:00`)
+    .lte('created_at', `${fim}T23:59:59`)
+  diasComDocumentos.value = new Set((data ?? []).map((d: any) => (d.created_at as string).slice(0, 10)))
 }
 
 // Qual preset corresponde às datas atuais — sem isso os botões nunca
@@ -311,24 +325,6 @@ const paginasVisiveis = computed(() => {
       </button>
     </div>
 
-    <!-- Funil por tipo -->
-    <div class="flex flex-wrap gap-2 items-center">
-      <span class="text-xs font-semibold" style="color:var(--color-text-muted)">Por tipo:</span>
-      <span
-        v-for="(label, key) in TIPOS_LABELS"
-        :key="key"
-        class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold cursor-pointer border transition-all"
-        :style="filtroTipo === key
-          ? `background:${TIPOS_CORES[key]};color:white;border-color:${TIPOS_CORES[key]}`
-          : `background:white;color:${TIPOS_CORES[key]};border-color:${TIPOS_CORES[key]}40`"
-        @click="filtroTipo = filtroTipo === key ? '' : key; pagina.value = 1"
-      >
-        <span class="w-1.5 h-1.5 rounded-full" :style="`background:${TIPOS_CORES[key]}`" />
-        {{ label }}
-        <span class="opacity-70">({{ funilPorTipo[key] ?? 0 }})</span>
-      </span>
-    </div>
-
     <!-- Painel de filtros -->
     <div class="bg-white rounded-2xl border p-4 space-y-4" style="border-color:var(--color-border)">
 
@@ -371,6 +367,12 @@ const paginasVisiveis = computed(() => {
         >
           {{ p.l }}
         </button>
+        <UiCalendarioDiaPicker
+          :model-value="diaEscolhido"
+          :dias-com-eventos="diasComDocumentos"
+          @update:model-value="escolherDiaCalendario"
+          @mes-mudou="carregarDiasComDocumentos"
+        />
         <div class="flex items-center gap-1.5 ml-auto">
           <input
             v-model="filtroDataInicio"
@@ -457,7 +459,7 @@ const paginasVisiveis = computed(() => {
               <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide" style="color:var(--color-text-muted)">Tipo</th>
               <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide" style="color:var(--color-text-muted)">Paciente</th>
               <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide hidden md:table-cell" style="color:var(--color-text-muted)">Médico</th>
-              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide hidden sm:table-cell" style="color:var(--color-text-muted)">Data</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide hidden sm:table-cell" style="color:var(--color-text-muted)">Data / Horário</th>
               <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide" style="color:var(--color-text-muted)">Status</th>
               <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide" style="color:var(--color-text-muted)">Ações</th>
             </tr>
@@ -496,7 +498,11 @@ const paginasVisiveis = computed(() => {
                 {{ (doc.medicos as any)?.nome ?? '—' }}
               </td>
               <td class="px-4 py-3 hidden sm:table-cell text-xs" style="color:var(--color-text-muted)">
-                {{ new Date(doc.created_at).toLocaleDateString('pt-BR') }}
+                <p>{{ new Date(doc.created_at).toLocaleDateString('pt-BR') }}</p>
+                <p style="color:var(--color-text-dim)">
+                  Consulta: {{ (doc.agendamentos as any)?.chamado_em ? new Date((doc.agendamentos as any).chamado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : (doc.agendamentos as any)?.horario ? (doc.agendamentos as any).horario.slice(0, 5) : '—' }}
+                  · Emitido: {{ new Date(doc.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) }}
+                </p>
               </td>
               <td class="px-4 py-3">
                 <span

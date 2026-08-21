@@ -34,7 +34,7 @@ async function carregar() {
   // RLS já restringe aos documentos de pacientes da unidade do atendente
   const { data } = await supabase
     .from('documentos')
-    .select('*, pacientes(nome), medicos(nome)')
+    .select('*, pacientes(nome), medicos(nome), agendamentos(chamado_em, horario)')
     .order('created_at', { ascending: false })
   documentos.value = (data ?? []) as Documento[]
   carregando.value = false
@@ -56,6 +56,16 @@ const filtroTipo = ref('')
 const filtroPeriodo = ref<'todos' | 'hoje' | '7dias' | '30dias'>('todos')
 const buscaPaciente = ref('')
 
+// Calendário — escolher um dia específico sobrepõe os botões de período
+const diaEscolhido = ref('')
+function escolherDiaCalendario(dia: string) {
+  diaEscolhido.value = dia
+  filtroPeriodo.value = 'todos'
+}
+// Já temos todos os documentos em memória (sem paginação nessa tela) —
+// não precisa buscar de novo a cada mês trocado no calendário.
+const diasComDocumentos = computed(() => new Set(documentos.value.map((d) => d.created_at.slice(0, 10))))
+
 const documentosFiltrados = computed(() => {
   const hoje = dataLocal(0)
   const limite7 = dataLocal(-6)
@@ -64,9 +74,13 @@ const documentosFiltrados = computed(() => {
   return documentos.value.filter((d) => {
     if (filtroTipo.value && d.tipo !== filtroTipo.value) return false
     const dia = d.created_at.slice(0, 10)
-    if (filtroPeriodo.value === 'hoje' && dia !== hoje) return false
-    if (filtroPeriodo.value === '7dias' && dia < limite7) return false
-    if (filtroPeriodo.value === '30dias' && dia < limite30) return false
+    if (diaEscolhido.value) {
+      if (dia !== diaEscolhido.value) return false
+    } else {
+      if (filtroPeriodo.value === 'hoje' && dia !== hoje) return false
+      if (filtroPeriodo.value === '7dias' && dia < limite7) return false
+      if (filtroPeriodo.value === '30dias' && dia < limite30) return false
+    }
     if (q && !((d.pacientes as any)?.nome ?? '').toLowerCase().includes(q)) return false
     return true
   })
@@ -113,9 +127,14 @@ function fmtDiaGrupo(data: string): string {
           v-for="p in [{ v: 'todos', l: 'Todos' }, { v: 'hoje', l: 'Hoje' }, { v: '7dias', l: '7 dias' }, { v: '30dias', l: '30 dias' }]"
           :key="p.v"
           class="px-3 py-1 rounded-full text-xs font-semibold border transition-all"
-          :style="filtroPeriodo === p.v ? 'background:#2563eb;color:white;border-color:#2563eb' : 'background:white;color:var(--color-text-muted);border-color:var(--color-border)'"
-          @click="filtroPeriodo = p.v as any"
+          :style="!diaEscolhido && filtroPeriodo === p.v ? 'background:#2563eb;color:white;border-color:#2563eb' : 'background:white;color:var(--color-text-muted);border-color:var(--color-border)'"
+          @click="filtroPeriodo = p.v as any; diaEscolhido = ''"
         >{{ p.l }}</button>
+        <UiCalendarioDiaPicker
+          :model-value="diaEscolhido"
+          :dias-com-eventos="diasComDocumentos"
+          @update:model-value="escolherDiaCalendario"
+        />
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
@@ -166,7 +185,8 @@ function fmtDiaGrupo(data: string): string {
               <td class="px-4 py-3 font-medium" style="color:var(--color-text)">{{ (doc.pacientes as any)?.nome ?? '—' }}</td>
               <td class="px-4 py-3 hidden md:table-cell text-sm" style="color:var(--color-text-muted)">{{ (doc.medicos as any)?.nome ?? '—' }}</td>
               <td class="px-4 py-3 hidden sm:table-cell text-xs" style="color:var(--color-text-muted)">
-                {{ new Date(doc.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) }}
+                Consulta: {{ (doc.agendamentos as any)?.chamado_em ? new Date((doc.agendamentos as any).chamado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : (doc.agendamentos as any)?.horario ? (doc.agendamentos as any).horario.slice(0, 5) : '—' }}
+                <br />Emitido: {{ new Date(doc.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) }}
               </td>
               <td class="px-4 py-3" @click.stop>
                 <button v-if="doc.pdf_url" class="p-1.5 rounded-lg" style="background:#eff6ff;color:#2563eb" title="Visualizar PDF" @click="abrirVer(doc)">
