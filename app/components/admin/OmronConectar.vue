@@ -92,6 +92,9 @@ const ocupado = computed(() => status.value === 'conectando' || status.value ===
         <button v-if="status === 'erro'" type="button" class="shrink-0 underline text-xs" @click="resetar">
           Tentar novamente
         </button>
+        <button v-if="status === 'sucesso' && !medicao" type="button" class="shrink-0 underline text-xs" @click="resetar">
+          Continuar
+        </button>
       </div>
 
       <!-- Botões de ação (idle) -->
