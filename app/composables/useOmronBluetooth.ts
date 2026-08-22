@@ -92,8 +92,10 @@ function parseRecord(bytes: Uint8Array): OmronMedicao | null {
   const diastolica = bytes[14]
   const pulso      = bytes[13]
 
-  // Registro vazio
-  if (sistolica === 25 && diastolica === 0 && pulso === 0) return null
+  // Registro vazio/inválido (inclui o caso de a conexão cair no meio da
+  // leitura: sobra um buffer zerado ou parcial, que sem essa checagem mais
+  // ampla passava como se fosse uma medição real, tipo sistólica 25/0/1).
+  if (diastolica === 0 || pulso === 0) return null
   // Valores impossíveis
   if (sistolica > 300 || diastolica > 200 || pulso > 250) return null
 
@@ -104,6 +106,10 @@ function parseRecord(bytes: Uint8Array): OmronMedicao | null {
   const mes    = (bytes[10] >> 2) & 0x0F
   const segundo = Math.min((bytes[9] >> 2) & 0x3F, 59) // Omron firmware bug: clamp
   const minuto  = ((bytes[8] >> 4) & 0x0F) | ((bytes[9] & 0x03) << 4)
+
+  // Data implausível (ex: mês 0, dia 0) também indica registro corrompido
+  // ou lido durante uma queda de conexão — não é uma medição de verdade.
+  if (mes < 1 || mes > 12 || dia < 1 || dia > 31) return null
 
   // bit 81 = irregular (ihb)
   const irregular = !!(bytes[10] & 0x02)
@@ -336,6 +342,14 @@ export function useOmronBluetooth() {
     try {
       const { device, txChars, unlockChar } = await conectarDispositivo()
 
+      // Detecta se a conexão cair no meio da leitura (relatado: "o
+      // pareamento cai" quando começa a ler). Sem isso, o loop de 60
+      // registros ficava tentando de novo a cada timeout de 5s — até 5
+      // minutos "rodando" sem avisar nada — e ainda podia devolver lixo
+      // como se fosse uma medição válida.
+      let desconectado = false
+      device.addEventListener('gattserverdisconnected', () => { desconectado = true })
+
       // Unlock
       mensagem.value = 'Autenticando...'
       await unlock(unlockChar)
@@ -359,6 +373,10 @@ export function useOmronBluetooth() {
       // Lê todos os registros EEPROM
       const registros: OmronMedicao[] = []
       for (let i = 0; i < RECORDS_COUNT; i++) {
+        if (desconectado) {
+          throw new Error(`Conexão com "${ultimoNomeDispositivo.value}" caiu no meio da leitura (registro ${i}/${RECORDS_COUNT}). Aproxime o aparelho do computador e tente de novo.`)
+        }
+
         const addr = EEPROM_USER1_START + i * RECORD_SIZE
         const cmd  = eepromReadCmd(addr, RECORD_SIZE)
 
@@ -372,6 +390,11 @@ export function useOmronBluetooth() {
           const rec  = parseRecord(data)
           if (rec) registros.push(rec)
         }
+
+        // Pequena pausa entre comandos — ler os 60 registros sem intervalo
+        // sobrecarrega o rádio BLE de alguns aparelhos e derruba a conexão
+        // no meio do processo.
+        await new Promise((resolve) => setTimeout(resolve, 30))
       }
 
       // End transmission
