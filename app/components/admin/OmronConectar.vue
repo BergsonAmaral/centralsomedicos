@@ -13,16 +13,6 @@ watch(medicao, (m) => {
 })
 
 const ocupado = computed(() => status.value === 'conectando' || status.value === 'lendo' || status.value === 'pareando')
-
-// Lembra se foi "Ler" ou "Parear" que disparou o não-encontrado, pra repetir
-// a mesma ação (agora sem filtro de nome) quando cair no fallback.
-const ultimaAcao = ref<'ler' | 'parear'>('ler')
-function clicarLer() { ultimaAcao.value = 'ler'; ler() }
-function clicarParear() { ultimaAcao.value = 'parear'; parear() }
-function verTodos() {
-  if (ultimaAcao.value === 'parear') parear(true)
-  else ler(true)
-}
 </script>
 
 <template>
@@ -89,22 +79,6 @@ function verTodos() {
         </button>
       </div>
 
-      <!-- Não encontrado com o filtro por nome -->
-      <div v-else-if="status === 'nao_encontrado'" class="p-3 rounded-lg space-y-2" style="background:#fef9c3;color:#854d0e">
-        <div class="flex items-center gap-2 text-sm">
-          <AlertCircle :size="15" class="shrink-0" />
-          <span class="flex-1">Nenhum aparelho "Omron" encontrado por perto com esse nome.</span>
-        </div>
-        <div class="flex gap-2">
-          <button type="button" class="text-xs px-2.5 py-1.5 rounded-lg font-semibold" style="background:#7c3aed;color:white" @click="verTodos">
-            Ver todos os aparelhos Bluetooth
-          </button>
-          <button type="button" class="text-xs px-2.5 py-1.5 rounded-lg" style="background:white;color:#854d0e;border:1px solid #fde68a" @click="resetar">
-            Cancelar
-          </button>
-        </div>
-      </div>
-
       <!-- Mensagem de status (conectando / lendo / erro) -->
       <div v-else-if="status !== 'idle'" class="flex items-center gap-2 text-sm p-3 rounded-lg"
         :style="status === 'erro'
@@ -126,7 +100,7 @@ function verTodos() {
           type="button"
           class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-colors hover:opacity-90"
           style="background:#7c3aed;color:#ffffff"
-          @click="clicarLer"
+          @click="ler()"
         >
           <BluetoothSearching :size="15" />
           Ler medição
@@ -136,7 +110,7 @@ function verTodos() {
           class="px-3 py-2.5 rounded-xl text-sm font-medium transition-colors hover:opacity-80"
           style="background:var(--color-surface);color:var(--color-text-muted);border:1px solid var(--color-border)"
           title="Parear aparelho pela primeira vez"
-          @click="clicarParear"
+          @click="parear()"
         >
           Parear
         </button>

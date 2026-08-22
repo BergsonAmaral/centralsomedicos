@@ -80,15 +80,27 @@ function dataLocal(offsetDias = 0): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+// Calendário — escolher um dia específico sobrepõe os botões de período.
+// Já temos tudo em memória (sem paginação nessa tela), então os dias com
+// evento vêm direto do que já foi carregado, sem precisar buscar de novo
+// a cada mês trocado no calendário.
+const diaEscolhidoAg = ref('')
+function escolherDiaAg(dia: string) { diaEscolhidoAg.value = dia; filtroPeriodo.value = 'todos' }
+const diasComConsulta = computed(() => new Set(agendamentos.value.map((a) => a.data_consulta)))
+
 const agendamentosFiltrados = computed(() => {
   const hoje = dataLocal(0)
   const inicioMes = dataLocal(-30)
   const q = buscaMotivo.value.trim().toLowerCase()
   return agendamentos.value.filter((a) => {
     if (filtroStatus.value && a.status !== filtroStatus.value) return false
-    if (filtroPeriodo.value === 'futuros' && a.data_consulta < hoje) return false
-    if (filtroPeriodo.value === 'passados' && a.data_consulta >= hoje) return false
-    if (filtroPeriodo.value === 'mes' && a.data_consulta < inicioMes) return false
+    if (diaEscolhidoAg.value) {
+      if (a.data_consulta !== diaEscolhidoAg.value) return false
+    } else {
+      if (filtroPeriodo.value === 'futuros' && a.data_consulta < hoje) return false
+      if (filtroPeriodo.value === 'passados' && a.data_consulta >= hoje) return false
+      if (filtroPeriodo.value === 'mes' && a.data_consulta < inicioMes) return false
+    }
     if (q && !(a.motivo ?? '').toLowerCase().includes(q)) return false
     return true
   })
@@ -115,10 +127,17 @@ function fmtDiaGrupo(data: string): string {
   return d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
 }
 
-// Documentos: mesma ideia — filtro por tipo + agrupado por dia de emissão
+// Documentos: mesma ideia — filtro por tipo + calendário + agrupado por dia de emissão
 const filtroTipoDoc = ref('')
+const diaEscolhidoDoc = ref('')
+function escolherDiaDoc(dia: string) { diaEscolhidoDoc.value = dia }
+const diasComDocumentos = computed(() => new Set(documentos.value.map((d) => d.created_at.slice(0, 10))))
 const documentosFiltrados = computed(() =>
-  filtroTipoDoc.value ? documentos.value.filter((d) => d.tipo === filtroTipoDoc.value) : documentos.value
+  documentos.value.filter((d) => {
+    if (filtroTipoDoc.value && d.tipo !== filtroTipoDoc.value) return false
+    if (diaEscolhidoDoc.value && d.created_at.slice(0, 10) !== diaEscolhidoDoc.value) return false
+    return true
+  })
 )
 interface DocComIndice { doc: Documento; indice: number }
 const documentosPorDia = computed(() => {
@@ -358,12 +377,15 @@ const TIPOS_LABELS: Record<string, string> = {
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
           <div>
             <label class="text-xs font-medium text-[var(--color-text-muted)] block mb-1">Período</label>
-            <select v-model="filtroPeriodo" class="input-base py-2 text-sm">
-              <option value="todos">Todos</option>
-              <option value="futuros">Futuros</option>
-              <option value="passados">Passados</option>
-              <option value="mes">Últimos 30 dias</option>
-            </select>
+            <div class="flex items-center gap-2">
+              <select v-model="filtroPeriodo" class="input-base py-2 text-sm" @change="diaEscolhidoAg = ''">
+                <option value="todos">Todos</option>
+                <option value="futuros">Futuros</option>
+                <option value="passados">Passados</option>
+                <option value="mes">Últimos 30 dias</option>
+              </select>
+              <UiCalendarioDiaPicker :model-value="diaEscolhidoAg" :dias-com-eventos="diasComConsulta" @update:model-value="escolherDiaAg" />
+            </div>
           </div>
           <div>
             <label class="text-xs font-medium text-[var(--color-text-muted)] block mb-1">Status</label>
@@ -440,12 +462,17 @@ const TIPOS_LABELS: Record<string, string> = {
         <template #header>
           <h3 class="font-semibold">Documentos Emitidos</h3>
         </template>
-        <div class="mb-3">
-          <label class="text-xs font-medium text-[var(--color-text-muted)] block mb-1">Tipo</label>
-          <select v-model="filtroTipoDoc" class="input-base py-2 text-sm max-w-xs">
-            <option value="">Todos</option>
-            <option v-for="(label, key) in TIPOS_LABELS" :key="key" :value="key">{{ label }}</option>
-          </select>
+        <div class="flex items-center gap-2 mb-3">
+          <div>
+            <label class="text-xs font-medium text-[var(--color-text-muted)] block mb-1">Tipo</label>
+            <select v-model="filtroTipoDoc" class="input-base py-2 text-sm max-w-xs">
+              <option value="">Todos</option>
+              <option v-for="(label, key) in TIPOS_LABELS" :key="key" :value="key">{{ label }}</option>
+            </select>
+          </div>
+          <div class="pt-5">
+            <UiCalendarioDiaPicker :model-value="diaEscolhidoDoc" :dias-com-eventos="diasComDocumentos" @update:model-value="escolherDiaDoc" />
+          </div>
         </div>
         <div v-if="documentosFiltrados.length === 0" class="py-6 text-center text-[var(--color-text-dim)] text-sm">
           Nenhum documento emitido
