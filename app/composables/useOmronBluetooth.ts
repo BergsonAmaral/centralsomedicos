@@ -119,6 +119,11 @@ export function useOmronBluetooth() {
   const status   = ref<Status>('idle')
   const mensagem = ref('')
   const medicao  = ref<OmronMedicao | null>(null)
+  // Nome do último aparelho escolhido no seletor Bluetooth — mostrado na UI
+  // (sucesso ou erro) pra ajudar a identificar o Omron manualmente, já que
+  // a lista mostra todo Bluetooth por perto e não dá pra filtrar pelo nome
+  // sem saber qual é de antemão.
+  const ultimoNomeDispositivo = ref('')
 
   const suportado = computed(() =>
     typeof navigator !== 'undefined' && 'bluetooth' in navigator,
@@ -181,16 +186,25 @@ export function useOmronBluetooth() {
     // por serviço (ou por nome — testamos "BLESmart"/"OMRON" e não bateu com
     // o nome real que esse aparelho anuncia) fazia ele nunca aparecer.
     // acceptAllDevices é a única forma confiável de garantir que ele apareça
-    // na lista — mostra outros Bluetooth por perto também, mas dá pra
-    // reconhecer pelo nome/modelo na hora de escolher.
+    // na lista — mostra outros Bluetooth por perto também. Sem saber ainda
+    // qual nome ele anuncia de verdade, mostramos o nome do aparelho
+    // escolhido na mensagem de status (sucesso ou erro) — assim dá pra ir
+    // testando manualmente um por um até achar o certo, e depois de achado
+    // a gente fixa esse nome num filtro pra não precisar escolher de novo.
     const device = await (navigator as any).bluetooth.requestDevice({
       acceptAllDevices: true,
       optionalServices: [OMRON_SERVICE],
     })
+    ultimoNomeDispositivo.value = device.name || '(sem nome)'
 
-    mensagem.value = 'Conectando...'
+    mensagem.value = `Conectando a "${ultimoNomeDispositivo.value}"...`
     const server  = await device.gatt.connect()
-    const service = await server.getPrimaryService(OMRON_SERVICE)
+    let service: any
+    try {
+      service = await server.getPrimaryService(OMRON_SERVICE)
+    } catch {
+      throw new Error(`"${ultimoNomeDispositivo.value}" não tem o serviço da Omron — não é esse aparelho. Tente ler de novo e escolha outro da lista.`)
+    }
 
     // Subscreve nos canais RX
     const rxChars: BluetoothRemoteGATTCharacteristic[] = []
@@ -303,7 +317,7 @@ export function useOmronBluetooth() {
       await pareamentoUnlock(unlockChar)
 
       status.value   = 'sucesso'
-      mensagem.value = 'Pareamento concluído! Agora use "Ler medição".'
+      mensagem.value = `Pareamento concluído com "${ultimoNomeDispositivo.value}"! Agora use "Ler medição".`
     } catch (e: any) {
       status.value   = 'erro'
       mensagem.value = e?.message ?? 'Erro no pareamento'
@@ -381,7 +395,7 @@ export function useOmronBluetooth() {
 
       medicao.value  = registros[0]
       status.value   = 'sucesso'
-      mensagem.value = `Medição lida: ${registros[0].sistolica}/${registros[0].diastolica} mmHg · ${registros[0].pulso} bpm`
+      mensagem.value = `"${ultimoNomeDispositivo.value}" · Medição lida: ${registros[0].sistolica}/${registros[0].diastolica} mmHg · ${registros[0].pulso} bpm`
     } catch (e: any) {
       status.value   = 'erro'
       mensagem.value = e?.message ?? 'Erro ao ler aparelho'
@@ -397,5 +411,5 @@ export function useOmronBluetooth() {
     rxReject       = null
   }
 
-  return { status, mensagem, medicao, suportado, parear, ler, resetar }
+  return { status, mensagem, medicao, suportado, ultimoNomeDispositivo, parear, ler, resetar }
 }
