@@ -190,6 +190,41 @@ export function useDispositivosBT() {
 
   const sinais = reactive<SinaisCapturados>({})
 
+  // Muitos aparelhos (o Omron incluso) desconectam sozinhos depois de
+  // mandar uma medição, pra economizar bateria — sem isso, cada nova
+  // aferição no mesmo paciente exigia clicar em "parear" de novo. Essa
+  // função assina as characteristics via `assinar(server)` e, se a conexão
+  // cair, tenta reconectar sozinha (com pequenas pausas) e assina de novo —
+  // assim a próxima aferição chega automática, sem precisar tocar em nada.
+  async function conectarComReconexaoAutomatica(
+    device: any,
+    s: LeituraDispositivo,
+    assinar: (server: any) => Promise<void>,
+  ) {
+    async function reconectarLoop() {
+      s.conectado = false
+      for (let tentativa = 0; tentativa < 10; tentativa++) {
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+        try {
+          const server = await device.gatt.connect()
+          s.conectado = true
+          await assinar(server)
+          return
+        } catch {
+          // aparelho ainda desligado/fora de alcance — tenta de novo
+        }
+      }
+      // desistiu de reconectar sozinho — próxima aferição precisa de um
+      // clique manual no card de novo
+    }
+
+    device.addEventListener('gattserverdisconnected', reconectarLoop)
+
+    const server = await device.gatt.connect()
+    s.conectado = true
+    await assinar(server)
+  }
+
   async function conectarPressao() {
     const s = estado.pressao
     s.erro = null; s.lendo = true
@@ -203,33 +238,32 @@ export function useDispositivosBT() {
         acceptAllDevices: true,
         optionalServices: [GATT.pressao.service, GATT.frequencia.service],
       })
-      const server = await device.gatt.connect()
-      s.conectado = true
 
-      // Pressão arterial
-      const svcPA = await server.getPrimaryService(GATT.pressao.service)
-      const charPA = await svcPA.getCharacteristic(GATT.pressao.char)
-      await charPA.startNotifications()
-      charPA.addEventListener('characteristicvaluechanged', (e: Event) => {
-        const d = (e.target as BluetoothRemoteGATTCharacteristic).value!
-        const r = decodificarPressao(d)
-        sinais.pressao_sistolica = r.sistolica
-        sinais.pressao_diastolica = r.diastolica
-        if (r.pulso) sinais.pulso = r.pulso
-        s.lendo = false
-      })
-
-      // Frequência cardíaca (se disponível no mesmo aparelho)
-      try {
-        const svcFC = await server.getPrimaryService(GATT.frequencia.service)
-        const charFC = await svcFC.getCharacteristic(GATT.frequencia.char)
-        await charFC.startNotifications()
-        charFC.addEventListener('characteristicvaluechanged', (e: Event) => {
+      await conectarComReconexaoAutomatica(device, s, async (server) => {
+        // Pressão arterial
+        const svcPA = await server.getPrimaryService(GATT.pressao.service)
+        const charPA = await svcPA.getCharacteristic(GATT.pressao.char)
+        await charPA.startNotifications()
+        charPA.addEventListener('characteristicvaluechanged', (e: Event) => {
           const d = (e.target as BluetoothRemoteGATTCharacteristic).value!
-          sinais.pulso = decodificarFrequencia(d)
+          const r = decodificarPressao(d)
+          sinais.pressao_sistolica = r.sistolica
+          sinais.pressao_diastolica = r.diastolica
+          if (r.pulso) sinais.pulso = r.pulso
+          s.lendo = false
         })
-      } catch { /* aparelho sem serviço de FC separado */ }
 
+        // Frequência cardíaca (se disponível no mesmo aparelho)
+        try {
+          const svcFC = await server.getPrimaryService(GATT.frequencia.service)
+          const charFC = await svcFC.getCharacteristic(GATT.frequencia.char)
+          await charFC.startNotifications()
+          charFC.addEventListener('characteristicvaluechanged', (e: Event) => {
+            const d = (e.target as BluetoothRemoteGATTCharacteristic).value!
+            sinais.pulso = decodificarFrequencia(d)
+          })
+        } catch { /* aparelho sem serviço de FC separado */ }
+      })
     } catch (e: any) {
       s.erro = mensagemErroBT(e)
       s.lendo = false
@@ -245,18 +279,18 @@ export function useDispositivosBT() {
         acceptAllDevices: true,
         optionalServices: [GATT.oximetro.service, GATT.frequencia.service],
       })
-      const server = await device.gatt.connect()
-      s.conectado = true
 
-      const svc = await server.getPrimaryService(GATT.oximetro.service)
-      const char = await svc.getCharacteristic(GATT.oximetro.char)
-      await char.startNotifications()
-      char.addEventListener('characteristicvaluechanged', (e: Event) => {
-        const d = (e.target as BluetoothRemoteGATTCharacteristic).value!
-        const r = decodificarOximetro(d)
-        sinais.saturacao = r.saturacao
-        sinais.pulso = sinais.pulso ?? r.pulso
-        s.lendo = false
+      await conectarComReconexaoAutomatica(device, s, async (server) => {
+        const svc = await server.getPrimaryService(GATT.oximetro.service)
+        const char = await svc.getCharacteristic(GATT.oximetro.char)
+        await char.startNotifications()
+        char.addEventListener('characteristicvaluechanged', (e: Event) => {
+          const d = (e.target as BluetoothRemoteGATTCharacteristic).value!
+          const r = decodificarOximetro(d)
+          sinais.saturacao = r.saturacao
+          sinais.pulso = sinais.pulso ?? r.pulso
+          s.lendo = false
+        })
       })
     } catch (e: any) {
       s.erro = mensagemErroBT(e)
@@ -273,16 +307,16 @@ export function useDispositivosBT() {
         acceptAllDevices: true,
         optionalServices: [GATT.termometro.service],
       })
-      const server = await device.gatt.connect()
-      s.conectado = true
 
-      const svc = await server.getPrimaryService(GATT.termometro.service)
-      const char = await svc.getCharacteristic(GATT.termometro.char)
-      await char.startNotifications()
-      char.addEventListener('characteristicvaluechanged', (e: Event) => {
-        const d = (e.target as BluetoothRemoteGATTCharacteristic).value!
-        sinais.temperatura = decodificarTemperatura(d)
-        s.lendo = false
+      await conectarComReconexaoAutomatica(device, s, async (server) => {
+        const svc = await server.getPrimaryService(GATT.termometro.service)
+        const char = await svc.getCharacteristic(GATT.termometro.char)
+        await char.startNotifications()
+        char.addEventListener('characteristicvaluechanged', (e: Event) => {
+          const d = (e.target as BluetoothRemoteGATTCharacteristic).value!
+          sinais.temperatura = decodificarTemperatura(d)
+          s.lendo = false
+        })
       })
     } catch (e: any) {
       s.erro = mensagemErroBT(e)
@@ -299,16 +333,16 @@ export function useDispositivosBT() {
         acceptAllDevices: true,
         optionalServices: [GATT.balanca.service],
       })
-      const server = await device.gatt.connect()
-      s.conectado = true
 
-      const svc = await server.getPrimaryService(GATT.balanca.service)
-      const char = await svc.getCharacteristic(GATT.balanca.char)
-      await char.startNotifications()
-      char.addEventListener('characteristicvaluechanged', (e: Event) => {
-        const d = (e.target as BluetoothRemoteGATTCharacteristic).value!
-        sinais.peso = decodificarBalanca(d)
-        s.lendo = false
+      await conectarComReconexaoAutomatica(device, s, async (server) => {
+        const svc = await server.getPrimaryService(GATT.balanca.service)
+        const char = await svc.getCharacteristic(GATT.balanca.char)
+        await char.startNotifications()
+        char.addEventListener('characteristicvaluechanged', (e: Event) => {
+          const d = (e.target as BluetoothRemoteGATTCharacteristic).value!
+          sinais.peso = decodificarBalanca(d)
+          s.lendo = false
+        })
       })
     } catch (e: any) {
       s.erro = mensagemErroBT(e)
@@ -325,16 +359,16 @@ export function useDispositivosBT() {
         acceptAllDevices: true,
         optionalServices: [GATT.glicosimetro.service],
       })
-      const server = await device.gatt.connect()
-      s.conectado = true
 
-      const svc = await server.getPrimaryService(GATT.glicosimetro.service)
-      const char = await svc.getCharacteristic(GATT.glicosimetro.char)
-      await char.startNotifications()
-      char.addEventListener('characteristicvaluechanged', (e: Event) => {
-        const d = (e.target as BluetoothRemoteGATTCharacteristic).value!
-        sinais.glicemia = decodificarGlicose(d)
-        s.lendo = false
+      await conectarComReconexaoAutomatica(device, s, async (server) => {
+        const svc = await server.getPrimaryService(GATT.glicosimetro.service)
+        const char = await svc.getCharacteristic(GATT.glicosimetro.char)
+        await char.startNotifications()
+        char.addEventListener('characteristicvaluechanged', (e: Event) => {
+          const d = (e.target as BluetoothRemoteGATTCharacteristic).value!
+          sinais.glicemia = decodificarGlicose(d)
+          s.lendo = false
+        })
       })
     } catch (e: any) {
       s.erro = mensagemErroBT(e)
@@ -351,18 +385,18 @@ export function useDispositivosBT() {
         acceptAllDevices: true,
         optionalServices: [GATT.bioimpedancia.service],
       })
-      const server = await device.gatt.connect()
-      s.conectado = true
 
-      const svc = await server.getPrimaryService(GATT.bioimpedancia.service)
-      const char = await svc.getCharacteristic(GATT.bioimpedancia.char)
-      await char.startNotifications()
-      char.addEventListener('characteristicvaluechanged', (e: Event) => {
-        const d = (e.target as BluetoothRemoteGATTCharacteristic).value!
-        const r = decodificarBioimpedancia(d)
-        sinais.gordura_percentual = r.gordura_percentual
-        if (r.imc) sinais.imc = r.imc
-        s.lendo = false
+      await conectarComReconexaoAutomatica(device, s, async (server) => {
+        const svc = await server.getPrimaryService(GATT.bioimpedancia.service)
+        const char = await svc.getCharacteristic(GATT.bioimpedancia.char)
+        await char.startNotifications()
+        char.addEventListener('characteristicvaluechanged', (e: Event) => {
+          const d = (e.target as BluetoothRemoteGATTCharacteristic).value!
+          const r = decodificarBioimpedancia(d)
+          sinais.gordura_percentual = r.gordura_percentual
+          if (r.imc) sinais.imc = r.imc
+          s.lendo = false
+        })
       })
     } catch (e: any) {
       s.erro = mensagemErroBT(e)
