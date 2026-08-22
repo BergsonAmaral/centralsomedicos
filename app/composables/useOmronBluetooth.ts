@@ -181,34 +181,72 @@ export function useOmronBluetooth() {
     })
   }
 
-  async function conectarDispositivo() {
+  // Guarda o id do aparelho escolhido pra não precisar reabrir a lista de
+  // seleção do navegador toda vez que clicar em "Ler medição" — só na
+  // primeira vez (ou se trocar de aparelho/navegador) precisa escolher de
+  // novo. O id só é útil dentro do mesmo navegador/computador.
+  const DEVICE_ID_KEY = 'omron_device_id'
+
+  async function dispositivoLembrado(): Promise<any | null> {
+    try {
+      const salvo = localStorage.getItem(DEVICE_ID_KEY)
+      if (!salvo || !(navigator as any).bluetooth?.getDevices) return null
+      const dispositivos = await (navigator as any).bluetooth.getDevices()
+      return dispositivos.find((d: any) => d.id === salvo) ?? null
+    } catch {
+      return null
+    }
+  }
+
+  function esquecerDispositivo() {
+    localStorage.removeItem(DEVICE_ID_KEY)
+  }
+
+  async function conectarDispositivo(forcarEscolha = false) {
     if (!suportado.value) {
       throw new Error('Web Bluetooth não disponível. Use Google Chrome ou Edge.')
     }
 
-    mensagem.value = 'Aguardando seleção do aparelho...'
-    // O HEM-7156T (e outros Omron BLE) não anuncia o serviço proprietário no
-    // pacote de advertising — só expõe depois de conectado — então filtrar
-    // por serviço (ou por nome — testamos "BLESmart"/"OMRON" e não bateu com
-    // o nome real que esse aparelho anuncia) fazia ele nunca aparecer.
-    // acceptAllDevices é a única forma confiável de garantir que ele apareça
-    // na lista — mostra outros Bluetooth por perto também. Sem saber ainda
-    // qual nome ele anuncia de verdade, mostramos o nome do aparelho
-    // escolhido na mensagem de status (sucesso ou erro) — assim dá pra ir
-    // testando manualmente um por um até achar o certo, e depois de achado
-    // a gente fixa esse nome num filtro pra não precisar escolher de novo.
-    const device = await (navigator as any).bluetooth.requestDevice({
-      acceptAllDevices: true,
-      optionalServices: [OMRON_SERVICE],
-    })
+    let device = forcarEscolha ? null : await dispositivoLembrado()
+
+    if (device) {
+      mensagem.value = `Reconectando a "${device.name || ultimoNomeDispositivo.value}"...`
+    } else {
+      mensagem.value = 'Aguardando seleção do aparelho...'
+      // O HEM-7156T (e outros Omron BLE) não anuncia o serviço proprietário
+      // no pacote de advertising — só expõe depois de conectado — então
+      // filtrar por serviço (ou por nome — testamos "BLESmart"/"OMRON" e não
+      // bateu com o nome real que esse aparelho anuncia) fazia ele nunca
+      // aparecer. acceptAllDevices é a única forma confiável de garantir que
+      // ele apareça na lista — mostra outros Bluetooth por perto também.
+      device = await (navigator as any).bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: [OMRON_SERVICE],
+      })
+      // Lembra esse aparelho pras próximas vezes não precisar escolher de
+      // novo — só funciona nesse mesmo navegador/computador.
+      try { localStorage.setItem(DEVICE_ID_KEY, device.id) } catch { /* ignora se localStorage indisponível */ }
+    }
     ultimoNomeDispositivo.value = device.name || '(sem nome)'
 
     mensagem.value = `Conectando a "${ultimoNomeDispositivo.value}"...`
-    const server  = await device.gatt.connect()
+    let server: any
+    try {
+      server = await device.gatt.connect()
+    } catch (e: any) {
+      if (!forcarEscolha) {
+        // Aparelho lembrado não respondeu (fora de alcance, desligado etc.)
+        // — cai pra pedir escolha manual em vez de simplesmente falhar.
+        esquecerDispositivo()
+        return conectarDispositivo(true)
+      }
+      throw e
+    }
     let service: any
     try {
       service = await server.getPrimaryService(OMRON_SERVICE)
     } catch {
+      esquecerDispositivo()
       throw new Error(`"${ultimoNomeDispositivo.value}" não tem o serviço da Omron — não é esse aparelho. Tente ler de novo e escolha outro da lista.`)
     }
 
@@ -434,5 +472,5 @@ export function useOmronBluetooth() {
     rxReject       = null
   }
 
-  return { status, mensagem, medicao, suportado, ultimoNomeDispositivo, parear, ler, resetar }
+  return { status, mensagem, medicao, suportado, ultimoNomeDispositivo, parear, ler, resetar, esquecerDispositivo }
 }

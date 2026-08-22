@@ -6,7 +6,7 @@ const emit = defineEmits<{
   medido: [{ sistolica: number; diastolica: number; pulso: number }]
 }>()
 
-const { status, mensagem, medicao, suportado, ultimoNomeDispositivo, parear, ler, resetar } = useOmronBluetooth()
+const { status, mensagem, medicao, suportado, ultimoNomeDispositivo, parear, ler, resetar, esquecerDispositivo } = useOmronBluetooth()
 
 watch(medicao, (m) => {
   if (m) emit('medido', { sistolica: m.sistolica, diastolica: m.diastolica, pulso: m.pulso })
@@ -121,7 +121,8 @@ const ocupado = computed(() => status.value === 'conectando' || status.value ===
         Tire a pressão no aparelho <strong>antes</strong> de clicar em "Ler medição".
       </p>
       <p v-if="status === 'idle' && ultimoNomeDispositivo" class="text-xs" style="color:var(--color-text-dim)">
-        Último aparelho tentado: <strong>"{{ ultimoNomeDispositivo }}"</strong>
+        Último aparelho tentado: <strong>"{{ ultimoNomeDispositivo }}"</strong> ·
+        <button type="button" class="underline" @click="esquecerDispositivo(); ultimoNomeDispositivo = ''">esquecer / trocar aparelho</button>
       </p>
     </template>
   </div>
