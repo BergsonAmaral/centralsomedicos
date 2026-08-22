@@ -361,10 +361,11 @@ async function confirmar() {
           </button>
 
           <div v-if="maletaAberta" class="mt-2 space-y-3">
-            <!-- Omron HEM-7156T (protocolo proprietário) -->
-            <AdminOmronConectar @medido="(v) => { triagem.pressao_sistolica = v.sistolica; triagem.pressao_diastolica = v.diastolica; triagem.pulso = v.pulso }" />
-
-            <!-- Demais aparelhos (protocolo GATT padrão) -->
+            <!-- Todos os aparelhos, incluindo o Omron — usa o protocolo GATT
+            padrão de pressão arterial, que o Omron também atende e é bem
+            mais simples/confiável que o protocolo proprietário dele (card
+            dedicado removido: mesma leitura, sem etapa extra de pareamento
+            nem os erros de conexão que o protocolo próprio dava). -->
             <div class="grid grid-cols-2 gap-2">
             <button
               v-for="d in dispositivosConfig"
