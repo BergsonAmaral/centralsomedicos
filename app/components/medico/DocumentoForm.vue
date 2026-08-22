@@ -27,8 +27,6 @@ const linkMemed = ref('')
 const salvandoMemed = ref(false)
 const erroMemed = ref('')
 
-const ehAbaReceita = computed(() => tab.value === 'receita' || tab.value === 'receita_controlada')
-
 function abrirMemed() {
   window.open('https://memed.com.br', '_blank', 'noopener,noreferrer')
 }
@@ -253,14 +251,14 @@ const tabAtiva = computed(() => TABS.find((t) => t.key === tab.value)!)
     </div>
 
     <div v-if="!ultimoPdfUrl">
-      <!-- Prescrição via Memed (receita / receita controlada) -->
-      <div v-if="ehAbaReceita" class="rounded-xl p-4 mb-4 space-y-3" style="background:#f5f3ff;border:1px solid #ddd6fe">
+      <!-- Documento já pronto na Memed (atestado, exame, receita, encaminhamento, declaração...) -->
+      <div class="rounded-xl p-4 mb-4 space-y-3" style="background:#f5f3ff;border:1px solid #ddd6fe">
         <div class="flex items-start gap-2.5">
           <Stamp :size="16" style="color:#7c3aed" class="shrink-0 mt-0.5" />
           <div class="flex-1 min-w-0">
-            <p class="text-sm font-semibold" style="color:#5b21b6">Prescrever com assinatura digital (Memed)</p>
+            <p class="text-sm font-semibold" style="color:#5b21b6">Já emitiu na Memed? Cole o link aqui</p>
             <p class="text-xs mt-0.5" style="color:#7c5cd6">
-              Abra sua conta pessoal Memed, prescreva normalmente e cole aqui o link da receita gerada.
+              Prescreva/emita normalmente na sua conta Memed (assinatura digital certificada) e cole o link — ele fica salvo no histórico do paciente e visível para atendente e admin.
             </p>
           </div>
         </div>
@@ -275,7 +273,7 @@ const tabAtiva = computed(() => TABS.find((t) => t.key === tab.value)!)
         <div class="flex gap-2">
           <input
             v-model="linkMemed"
-            placeholder="Cole aqui o link da receita gerada na Memed"
+            placeholder="Cole aqui o link gerado na Memed"
             class="flex-1 px-3 py-2 rounded-lg border text-sm"
             style="border-color:#ddd6fe;background:white"
           >
