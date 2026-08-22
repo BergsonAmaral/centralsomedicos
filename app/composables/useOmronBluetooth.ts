@@ -114,7 +114,7 @@ function parseRecord(bytes: Uint8Array): OmronMedicao | null {
 // ─── Composable ──────────────────────────────────────────────────────────────
 
 export function useOmronBluetooth() {
-  type Status = 'idle' | 'conectando' | 'pareando' | 'lendo' | 'sucesso' | 'erro'
+  type Status = 'idle' | 'conectando' | 'pareando' | 'lendo' | 'sucesso' | 'erro' | 'nao_encontrado'
 
   const status   = ref<Status>('idle')
   const mensagem = ref('')
@@ -170,20 +170,25 @@ export function useOmronBluetooth() {
     })
   }
 
-  async function conectarDispositivo() {
+  async function conectarDispositivo(todosDispositivos = false) {
     if (!suportado.value) {
       throw new Error('Web Bluetooth não disponível. Use Google Chrome ou Edge.')
     }
 
     mensagem.value = 'Aguardando seleção do aparelho...'
-    // acceptAllDevices em vez de filtrar por serviço: o HEM-7156T (e outros
-    // Omron BLE) não anuncia o serviço proprietário no pacote de advertising,
-    // só expõe depois de conectado — com filtro por serviço o aparelho nunca
-    // aparecia na lista de seleção do navegador.
-    const device = await (navigator as any).bluetooth.requestDevice({
-      acceptAllDevices: true,
-      optionalServices: [OMRON_SERVICE],
-    })
+    // O HEM-7156T (e outros Omron BLE) não anuncia o serviço proprietário no
+    // pacote de advertising — só expõe depois de conectado — então filtrar
+    // por serviço fazia o aparelho nunca aparecer na lista. Os monitores
+    // Omron dessa linha costumam anunciar o nome com prefixo "BLESmart" ou
+    // "OMRON", então filtramos por nome pra já cair só nos aparelhos certos
+    // (em vez de listar todo Bluetooth por perto, o que confunde). Se não
+    // for encontrado (nome diferente do esperado), o botão "Ver todos os
+    // aparelhos" cai pra acceptAllDevices como último recurso.
+    const device = await (navigator as any).bluetooth.requestDevice(
+      todosDispositivos
+        ? { acceptAllDevices: true, optionalServices: [OMRON_SERVICE] }
+        : { filters: [{ namePrefix: 'BLESmart' }, { namePrefix: 'OMRON' }], optionalServices: [OMRON_SERVICE] },
+    )
 
     mensagem.value = 'Conectando...'
     const server  = await device.gatt.connect()
@@ -288,13 +293,13 @@ export function useOmronBluetooth() {
    * parear() — apenas na primeira vez por aparelho.
    * Grava a chave padrão no aparelho para permitir conexões futuras.
    */
-  async function parear() {
+  async function parear(todosDispositivos = false) {
     status.value   = 'pareando'
     mensagem.value = 'Iniciando pareamento...'
     medicao.value  = null
 
     try {
-      const { txChars, unlockChar } = await conectarDispositivo()
+      const { txChars, unlockChar } = await conectarDispositivo(todosDispositivos)
 
       mensagem.value = 'Gravando chave no aparelho...'
       await pareamentoUnlock(unlockChar)
@@ -302,7 +307,7 @@ export function useOmronBluetooth() {
       status.value   = 'sucesso'
       mensagem.value = 'Pareamento concluído! Agora use "Ler medição".'
     } catch (e: any) {
-      status.value   = 'erro'
+      status.value   = e?.name === 'NotFoundError' ? 'nao_encontrado' : 'erro'
       mensagem.value = e?.message ?? 'Erro no pareamento'
     }
   }
@@ -311,13 +316,13 @@ export function useOmronBluetooth() {
    * ler() — lê a medição mais recente do aparelho.
    * O paciente deve tirar a pressão ANTES de clicar.
    */
-  async function ler() {
+  async function ler(todosDispositivos = false) {
     status.value   = 'conectando'
     mensagem.value = 'Conectando ao aparelho...'
     medicao.value  = null
 
     try {
-      const { device, txChars, unlockChar } = await conectarDispositivo()
+      const { device, txChars, unlockChar } = await conectarDispositivo(todosDispositivos)
 
       // Unlock
       mensagem.value = 'Autenticando...'
@@ -380,7 +385,7 @@ export function useOmronBluetooth() {
       status.value   = 'sucesso'
       mensagem.value = `Medição lida: ${registros[0].sistolica}/${registros[0].diastolica} mmHg · ${registros[0].pulso} bpm`
     } catch (e: any) {
-      status.value   = 'erro'
+      status.value   = e?.name === 'NotFoundError' ? 'nao_encontrado' : 'erro'
       mensagem.value = e?.message ?? 'Erro ao ler aparelho'
     }
   }
