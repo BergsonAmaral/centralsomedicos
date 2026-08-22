@@ -176,8 +176,13 @@ export function useOmronBluetooth() {
     }
 
     mensagem.value = 'Aguardando seleção do aparelho...'
+    // acceptAllDevices em vez de filtrar por serviço: o HEM-7156T (e outros
+    // Omron BLE) não anuncia o serviço proprietário no pacote de advertising,
+    // só expõe depois de conectado — com filtro por serviço o aparelho nunca
+    // aparecia na lista de seleção do navegador.
     const device = await (navigator as any).bluetooth.requestDevice({
-      filters: [{ services: [OMRON_SERVICE] }],
+      acceptAllDevices: true,
+      optionalServices: [OMRON_SERVICE],
     })
 
     mensagem.value = 'Conectando...'
