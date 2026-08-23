@@ -12,6 +12,7 @@ const pacienteAtual = ref<Agendamento | null>(null)
 const horaAtual = ref('')
 const erro = ref('')
 const medicoOcupado = ref(false)
+const posicaoFila = ref(0) // 0 = não sabe / não se aplica; 1 = próximo; 2+ = quantos na frente
 
 const unidadeNome = computed(() => sala.value?.unidades?.nome ?? '')
 
@@ -54,23 +55,43 @@ async function buscarPacienteAtivo() {
 }
 
 // Enquanto o paciente espera o médico aceitar (aguardando_medico), verifica
-// se esse médico já está em outro atendimento agora — pra avisar o motivo
-// da espera em vez de deixar a tela genérica "sendo notificado" sem
-// explicação nenhuma.
+// (1) se esse médico já está em outro atendimento agora e (2) quantos
+// outros pacientes já estão na fila dele há mais tempo — pra não dizer
+// "você é o próximo" quando na verdade tem mais gente na frente (nada
+// impede dois atendentes encaminharem pacientes diferentes pro mesmo
+// médico livre ao mesmo tempo).
 async function checarMedicoOcupado() {
   const p = pacienteAtual.value
   if (!p || p.status !== 'aguardando_medico' || !p.medico_id) {
     medicoOcupado.value = false
+    posicaoFila.value = 0
     return
   }
-  const { data } = await supabase
-    .from('agendamentos')
-    .select('id')
-    .eq('medico_id', p.medico_id)
-    .eq('status', 'em_consulta')
-    .neq('id', p.id)
-    .limit(1)
-  medicoOcupado.value = (data?.length ?? 0) > 0
+
+  const [ocupadoRes, filaRes] = await Promise.all([
+    supabase
+      .from('agendamentos')
+      .select('id')
+      .eq('medico_id', p.medico_id)
+      .eq('status', 'em_consulta')
+      .neq('id', p.id)
+      .limit(1),
+    supabase
+      .from('agendamentos')
+      .select('id, chamado_em')
+      .eq('medico_id', p.medico_id)
+      .eq('status', 'aguardando_medico')
+      .eq('data_consulta', getHoje()),
+  ])
+
+  medicoOcupado.value = (ocupadoRes.data?.length ?? 0) > 0
+
+  const fila = (filaRes.data ?? []) as { id: string; chamado_em: string | null }[]
+  const minhaChamada = fila.find((a) => a.id === p.id)?.chamado_em ?? p.chamado_em
+  const naFrente = minhaChamada
+    ? fila.filter((a) => a.id !== p.id && (a.chamado_em ?? '') < minhaChamada).length
+    : 0
+  posicaoFila.value = naFrente + 1
 }
 
 // Buscar a sala (e a unidade dona dela) pelo slug
@@ -156,6 +177,7 @@ onMounted(() => {
           if (pacienteAtual.value?.id === payload.new.id) {
             pacienteAtual.value = null
             medicoOcupado.value = false
+            posicaoFila.value = 0
           }
         }
       }
@@ -204,6 +226,7 @@ async function entrarConsulta() {
       :paciente-atual="pacienteAtual"
       :hora-atual="horaAtual"
       :medico-ocupado="medicoOcupado"
+      :posicao-fila="posicaoFila"
       @entrar="entrarConsulta"
     />
   </div>

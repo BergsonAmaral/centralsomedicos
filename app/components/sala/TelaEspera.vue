@@ -9,6 +9,7 @@ const props = defineProps<{
   pacienteAtual: Agendamento | null
   horaAtual: string
   medicoOcupado?: boolean
+  posicaoFila?: number
 }>()
 
 const emit = defineEmits<{ entrar: [] }>()
@@ -279,8 +280,14 @@ function handleEntrar() { jitsiAtivo.value = true; emit('entrar') }
 
           <div style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem 1.5rem;border-radius:1rem;background:rgba(251,191,36,0.1);border:2px solid rgba(251,191,36,0.3)">
             <span style="width:12px;height:12px;border-radius:50%;background:#fbbf24;animation:blink 1.2s ease-in-out infinite;display:inline-block;flex-shrink:0" />
-            <span v-if="medicoOcupado" style="color:#fde68a;font-weight:600;font-size:1.2rem">
+            <span v-if="medicoOcupado && (posicaoFila ?? 0) > 1" style="color:#fde68a;font-weight:600;font-size:1.2rem">
+              Dr(a). {{ nomeMedicoAtual }} está em outro atendimento — você é o {{ posicaoFila }}º da fila
+            </span>
+            <span v-else-if="medicoOcupado" style="color:#fde68a;font-weight:600;font-size:1.2rem">
               Dr(a). {{ nomeMedicoAtual }} está em outro atendimento — você é o próximo
+            </span>
+            <span v-else-if="(posicaoFila ?? 0) > 1" style="color:#fde68a;font-weight:600;font-size:1.2rem">
+              Você é o {{ posicaoFila }}º da fila do Dr(a). {{ nomeMedicoAtual }}
             </span>
             <span v-else style="color:#fde68a;font-weight:600;font-size:1.2rem">O médico está sendo notificado...</span>
           </div>
