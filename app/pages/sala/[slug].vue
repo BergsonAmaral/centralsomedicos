@@ -11,6 +11,7 @@ const sala = ref<Sala | null>(null)
 const pacienteAtual = ref<Agendamento | null>(null)
 const horaAtual = ref('')
 const erro = ref('')
+const medicoOcupado = ref(false)
 
 const unidadeNome = computed(() => sala.value?.unidades?.nome ?? '')
 
@@ -49,6 +50,27 @@ async function buscarPacienteAtivo() {
     .eq('data_consulta', getHoje())
 
   pacienteAtual.value = escolherAtivo(data ?? [])
+  await checarMedicoOcupado()
+}
+
+// Enquanto o paciente espera o médico aceitar (aguardando_medico), verifica
+// se esse médico já está em outro atendimento agora — pra avisar o motivo
+// da espera em vez de deixar a tela genérica "sendo notificado" sem
+// explicação nenhuma.
+async function checarMedicoOcupado() {
+  const p = pacienteAtual.value
+  if (!p || p.status !== 'aguardando_medico' || !p.medico_id) {
+    medicoOcupado.value = false
+    return
+  }
+  const { data } = await supabase
+    .from('agendamentos')
+    .select('id')
+    .eq('medico_id', p.medico_id)
+    .eq('status', 'em_consulta')
+    .neq('id', p.id)
+    .limit(1)
+  medicoOcupado.value = (data?.length ?? 0) > 0
 }
 
 // Buscar a sala (e a unidade dona dela) pelo slug
@@ -78,6 +100,7 @@ if (!salaData.value) {
     .eq('data_consulta', getHoje())
 
   pacienteAtual.value = escolherAtivo(ativos ?? [])
+  await checarMedicoOcupado()
 }
 
 // Se o paciente fechar a aba/navegador durante a consulta, avisa o servidor
@@ -127,10 +150,12 @@ onMounted(() => {
             .eq('id', payload.new.id)
             .single()
           pacienteAtual.value = data
+          await checarMedicoOcupado()
         }
         if (['concluido', 'cancelado', 'faltou', 'checkin', 'agendado'].includes(payload.new.status)) {
           if (pacienteAtual.value?.id === payload.new.id) {
             pacienteAtual.value = null
+            medicoOcupado.value = false
           }
         }
       }
@@ -178,6 +203,7 @@ async function entrarConsulta() {
       :sala-slug="slug"
       :paciente-atual="pacienteAtual"
       :hora-atual="horaAtual"
+      :medico-ocupado="medicoOcupado"
       @entrar="entrarConsulta"
     />
   </div>
