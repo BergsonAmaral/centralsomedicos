@@ -5,6 +5,9 @@
 export default defineNuxtRouteMiddleware((to) => {
   const config = useRuntimeConfig()
   if (!config.public.manutencao) return
-  if (to.path === '/manutencao') return
+  // A página inicial (landing pública) continua no ar normalmente — só
+  // bloqueia quem tenta entrar na plataforma de verdade (login, painéis,
+  // agendamento etc).
+  if (to.path === '/' || to.path === '/manutencao') return
   return navigateTo('/manutencao')
 })
