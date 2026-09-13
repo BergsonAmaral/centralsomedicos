@@ -49,7 +49,11 @@ export default defineNuxtConfig({
     smtpFrom: process.env.SMTP_FROM ?? 'SoMedicos <noreply@somedicos.com.br>',
     dailyApiKey: process.env.DAILY_API_KEY ?? '',
     dailyDomain: process.env.DAILY_DOMAIN ?? '',
-    public: {},
+    public: {
+      // Modo manutenção: liga/desliga via variável de ambiente (sem precisar
+      // mexer em código) — redireciona todo o site pra /manutencao.
+      manutencao: process.env.NUXT_PUBLIC_MANUTENCAO === 'true',
+    },
   },
 
   app: {
